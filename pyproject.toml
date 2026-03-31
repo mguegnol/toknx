@@ -18,3 +18,21 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
+[tool.uv.workspace]
+members = [
+    "apps/coordinator",
+    "apps/node-cli",
+]
+
+[tool.uv.sources]
+toknx-coordinator = { workspace = true, editable = true }
+toknx-node = { workspace = true, editable = true }
+
+[dependency-groups]
+dev = [
+    "greenlet>=3.3.2",
+    "pytest>=9.0.2",
+    "toknx-coordinator",
+    "toknx-node",
+]
+

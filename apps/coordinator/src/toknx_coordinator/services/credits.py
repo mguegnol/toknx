@@ -31,8 +31,20 @@ async def ensure_credit_balance(session: AsyncSession, account: Account) -> Cred
     return balance
 
 
+async def _get_credit_balance_for_update(session: AsyncSession, account_id: str) -> CreditBalance:
+    balance = (
+        await session.execute(
+            select(CreditBalance).where(CreditBalance.account_id == account_id).with_for_update()
+        )
+    ).scalar_one_or_none()
+    if balance is None:
+        raise ValueError("credit balance missing")
+    return balance
+
+
 async def lock_stake(session: AsyncSession, account: Account, *, node_id: str | None = None) -> Stake:
-    balance = await ensure_credit_balance(session, account)
+    await ensure_credit_balance(session, account)
+    balance = await _get_credit_balance_for_update(session, account.id)
     if balance.balance < settings.node_stake_credits:
         raise ValueError("insufficient credits for stake")
 
@@ -92,10 +104,8 @@ async def settle_job(
     credits_per_1k: int,
     contributor_account_id: str,
 ) -> None:
-    consumer_balance = await session.get(CreditBalance, job.account_id)
-    contributor_balance = await session.get(CreditBalance, contributor_account_id)
-    if consumer_balance is None or contributor_balance is None:
-        raise ValueError("credit balances missing")
+    consumer_balance = await _get_credit_balance_for_update(session, job.account_id)
+    contributor_balance = await _get_credit_balance_for_update(session, contributor_account_id)
 
     output_tokens = max(job.output_tokens, 0)
     total_credits = max(1, round((output_tokens / 1000) * credits_per_1k))
@@ -136,4 +146,3 @@ async def settle_job(
         ]
     )
     await session.flush()
-

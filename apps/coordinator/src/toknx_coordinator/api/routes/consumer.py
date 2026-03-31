@@ -65,10 +65,6 @@ async def create_chat_completion(
     session: AsyncSession = Depends(get_db_session),
     tunnel_manager: TunnelManager = Depends(get_tunnel_manager),
 ):
-    balance = await ensure_credit_balance(session, account)
-    if balance.balance <= 0:
-        raise HTTPException(status_code=402, detail="insufficient credits")
-
     inflight = await _active_jobs_for_account(session, account.id)
     if inflight >= settings.account_inflight_limit:
         raise HTTPException(status_code=429, detail="too many in-flight jobs")
@@ -81,7 +77,10 @@ async def create_chat_completion(
     if pending_for_model >= settings.model_queue_cap:
         raise HTTPException(status_code=429, detail="model queue is full")
 
+    balance = await ensure_credit_balance(session, account)
     model = await resolve_or_create_model(session, payload.model)
+    if balance.balance < model.credits_per_1k_tokens:
+        raise HTTPException(status_code=402, detail="insufficient credits")
     job = Job(
         account_id=account.id,
         model=payload.model,
@@ -107,7 +106,14 @@ async def create_chat_completion(
     await session.commit()
 
     stream = tunnel_manager.open_job_stream(job.id)
-    await tunnel_manager.dispatch(node.id, job)
+    try:
+        await tunnel_manager.dispatch(node.id, job)
+    except Exception as exc:
+        tunnel_manager.close_job_stream(job.id)
+        job.status = "failed"
+        job.completed_at = datetime.now(timezone.utc)
+        await session.commit()
+        raise HTTPException(status_code=503, detail="selected node became unavailable") from exc
 
     async def _finalize(output_tokens: int) -> None:
         refreshed_job = await session.get(Job, job.id)

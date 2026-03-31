@@ -11,7 +11,7 @@ from toknx_coordinator.api.deps import get_db_session
 from toknx_coordinator.core.config import get_settings
 from toknx_coordinator.db.models import Account
 from toknx_coordinator.services.credits import ensure_credit_balance
-from toknx_coordinator.services.security import generate_token, hash_token
+from toknx_coordinator.services.security import derive_stable_token, generate_token, hash_token
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 settings = get_settings()
@@ -43,8 +43,6 @@ async def github_auth(
         "scope": "read:user",
         "state": github_state,
     }
-    if redirect_uri:
-        params["redirect_uri"] = redirect_uri
     return RedirectResponse(url=f"https://github.com/login/oauth/authorize?{urlencode(params)}")
 
 
@@ -89,7 +87,7 @@ async def github_callback(
     ).scalar_one_or_none()
 
     api_key = generate_token("toknx_api")
-    node_token = generate_token("toknx_node")
+    node_token = derive_stable_token("toknx_node", subject=github_id, secret=settings.jwt_secret)
 
     if account is None:
         account = Account(
@@ -116,4 +114,3 @@ async def github_callback(
     if redirect_uri:
         return RedirectResponse(url=f"{redirect_uri}?{urlencode(payload | {'state': state or ''})}")
     return payload
-
