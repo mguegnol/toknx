@@ -1,0 +1,10 @@
+Metadata-Version: 2.4
+Name: toknx-node
+Version: 0.1.0
+Summary: ToknX node CLI
+Requires-Python: >=3.9
+Requires-Dist: typer==0.15.2
+Requires-Dist: click==8.1.8
+Requires-Dist: httpx==0.28.1
+Requires-Dist: websockets==15.0.1
+Requires-Dist: platformdirs==4.3.6

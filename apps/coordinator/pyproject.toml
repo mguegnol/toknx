@@ -1,0 +1,30 @@
+[project]
+name = "toknx-coordinator"
+version = "0.1.0"
+description = "ToknX coordinator service"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi==0.135.2",
+  "uvicorn[standard]==0.42.0",
+  "sqlalchemy==2.0.48",
+  "aiosqlite==0.22.1",
+  "asyncpg==0.31.0",
+  "httpx==0.28.1",
+  "redis==7.4.0",
+  "prometheus-client==0.24.1",
+  "PyJWT==2.12.1",
+  "pydantic-settings==2.13.1",
+]
+
+[project.scripts]
+toknx-coordinator = "toknx_coordinator.main:run"
+
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

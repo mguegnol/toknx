@@ -1,0 +1,20 @@
+[project]
+name = "toknx-monorepo"
+version = "0.1.0"
+description = "ToknX v1 monorepo"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+pythonpath = [
+  "apps/coordinator/src",
+  "apps/node-cli/src",
+]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+

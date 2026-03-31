@@ -1,0 +1,95 @@
+import asyncio
+import secrets
+from pathlib import Path
+
+import typer
+
+from toknx_node.auth_flow import login_via_browser
+from toknx_node.client import ToknXClient
+from toknx_node.config import clear_runtime, load_config, load_runtime, save_config
+from toknx_node.runner import StartOptions, run_node
+
+app = typer.Typer(no_args_is_help=True)
+
+
+@app.command()
+def login(
+    api_base_url: str = typer.Option("http://localhost/api", help="Coordinator API base URL."),
+    username: str = typer.Option("localdev", help="Development username for local OAuth bypass."),
+) -> None:
+    state = secrets.token_urlsafe(16)
+    result = login_via_browser(api_base_url, state=state, username=username)
+    if result.get("state") != state:
+        raise typer.BadParameter("oauth state mismatch")
+    config = load_config()
+    config.api_base_url = api_base_url
+    config.github_username = result["github_username"]
+    config.api_key = result["api_key"]
+    config.node_token = result["node_token"]
+    save_config(config)
+    typer.echo(f"Logged in as @{config.github_username}")
+
+
+@app.command()
+def start(
+    model: str = typer.Option(..., help="Comma-separated Hugging Face model ids."),
+    capability_mode: str = typer.Option("solo", help="Node capability mode."),
+    launch_exo: bool = typer.Option(False, help="Start exo automatically."),
+    mock_inference: bool = typer.Option(False, help="Use a mock generator instead of exo."),
+    exo_port: int = typer.Option(52415, help="Local exo API port."),
+) -> None:
+    config = load_config()
+    if not config.api_key or not config.node_token:
+        raise typer.BadParameter("run `toknx login` first")
+    models = [item.strip() for item in model.split(",") if item.strip()]
+    asyncio.run(
+        run_node(
+            config,
+            StartOptions(
+                models=models,
+                capability_mode=capability_mode,
+                launch_exo=launch_exo,
+                mock_inference=mock_inference,
+                exo_port=exo_port,
+            ),
+        )
+    )
+
+
+@app.command()
+def status() -> None:
+    config = load_config()
+    runtime = load_runtime()
+    typer.echo(f"Account: @{config.github_username or 'not logged in'}")
+    if config.api_key and config.node_token:
+        client = ToknXClient(config.api_base_url, config.api_key, config.node_token)
+        try:
+            balance = client.get_balance()
+            typer.echo(f"Credits: {balance['balance']}")
+        except Exception as exc:
+            typer.echo(f"Credits: unavailable ({exc})")
+    if runtime.node_id:
+        typer.echo(f"Node: {runtime.node_id}")
+        typer.echo(f"Models: {', '.join(runtime.models or [])}")
+        typer.echo(f"Started: {runtime.started_at}")
+    else:
+        typer.echo("Node: offline")
+
+
+@app.command()
+def stop() -> None:
+    config = load_config()
+    runtime = load_runtime()
+    if runtime.node_id and config.node_token:
+        client = ToknXClient(config.api_base_url, config.api_key, config.node_token)
+        try:
+            client.deregister_node(runtime.node_id)
+            typer.echo(f"Deregistered node {runtime.node_id}")
+        except Exception as exc:
+            typer.echo(f"Failed to deregister node: {exc}")
+    clear_runtime()
+
+
+if __name__ == "__main__":
+    app()
+

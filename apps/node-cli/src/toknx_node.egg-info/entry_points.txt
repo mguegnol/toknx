@@ -1,0 +1,2 @@
+[console_scripts]
+toknx = toknx_node.cli:app

@@ -1,0 +1,38 @@
+http:
+  routers:
+    toknx-node-tunnel:
+      entryPoints:
+        - web
+      rule: Path(`/nodes/tunnel`)
+      service: toknx-api
+
+    toknx-api:
+      entryPoints:
+        - web
+      rule: PathPrefix(`/api`)
+      middlewares:
+        - strip-api-prefix
+      service: toknx-api
+
+    toknx-dashboard:
+      entryPoints:
+        - web
+      rule: PathPrefix(`/`)
+      service: toknx-dashboard
+
+  middlewares:
+    strip-api-prefix:
+      stripPrefix:
+        prefixes:
+          - /api
+
+  services:
+    toknx-api:
+      loadBalancer:
+        servers:
+          - url: http://coordinator:8000
+
+    toknx-dashboard:
+      loadBalancer:
+        servers:
+          - url: http://dashboard:3000

@@ -1,0 +1,72 @@
+services:
+  traefik:
+    image: traefik:v3.3
+    command:
+      - --providers.file.filename=/etc/traefik/dynamic.yml
+      - --entrypoints.web.address=:80
+      - --api.dashboard=true
+    ports:
+      - "80:80"
+      - "8080:8080"
+    volumes:
+      - ./infra/traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
+
+  coordinator:
+    build:
+      context: ./apps/coordinator
+    environment:
+      TOKNX_DATABASE_URL: postgresql+asyncpg://toknx:toknx@postgres:5432/toknx
+      TOKNX_REDIS_URL: redis://redis:6379/0
+      TOKNX_PUBLIC_BASE_URL: http://localhost/api
+      TOKNX_GITHUB_REDIRECT_URL: http://localhost/api/auth/github/callback
+      TOKNX_DASHBOARD_ORIGIN: http://localhost
+      TOKNX_AUTH_DEV_BYPASS: "true"
+      TOKNX_JWT_SECRET: development-secret
+    depends_on:
+      - postgres
+      - redis
+
+  dashboard:
+    build:
+      context: ./apps/dashboard
+    environment:
+      TOKNX_PUBLIC_API_BASE: http://coordinator:8000
+      VITE_TOKNX_API_BASE: http://localhost/api
+    depends_on:
+      - coordinator
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: toknx
+      POSTGRES_USER: toknx
+      POSTGRES_PASSWORD: toknx
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  prometheus:
+    image: prom/prometheus:v3.2.1
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:11.5.2
+    ports:
+      - "3001:3000"
+    volumes:
+      - ./infra/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./infra/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+    depends_on:
+      - prometheus
+
+volumes:
+  postgres-data:

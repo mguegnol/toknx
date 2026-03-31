@@ -1,0 +1,17 @@
+.DS_Store
+.env
+.venv/
+node_modules/
+dist/
+build/
+.svelte-kit/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+toknx.db
+apps/node-cli/.toknx/
+

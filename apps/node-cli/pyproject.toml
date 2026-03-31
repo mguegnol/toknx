@@ -1,0 +1,25 @@
+[project]
+name = "toknx-node"
+version = "0.1.0"
+description = "ToknX node CLI"
+requires-python = ">=3.9"
+dependencies = [
+  "typer==0.15.2",
+  "click==8.1.8",
+  "httpx==0.28.1",
+  "websockets==15.0.1",
+  "platformdirs==4.3.6",
+]
+
+[project.scripts]
+toknx = "toknx_node.cli:app"
+
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
