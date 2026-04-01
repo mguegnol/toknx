@@ -19,10 +19,12 @@ services:
       TOKNX_REDIS_URL: redis://redis:6379/0
       TOKNX_PUBLIC_BASE_URL: http://localhost/api
       TOKNX_NODE_TUNNEL_PUBLIC_BASE_URL: ws://localhost
+      TOKNX_GITHUB_CLIENT_ID: ${TOKNX_GITHUB_CLIENT_ID:-}
+      TOKNX_GITHUB_CLIENT_SECRET: ${TOKNX_GITHUB_CLIENT_SECRET:-}
       TOKNX_GITHUB_REDIRECT_URL: http://localhost/api/auth/github/callback
       TOKNX_DASHBOARD_ORIGIN: http://localhost
-      TOKNX_AUTH_DEV_BYPASS: "true"
-      TOKNX_JWT_SECRET: development-secret
+      TOKNX_AUTH_DEV_BYPASS: "false"
+      TOKNX_JWT_SECRET: ${TOKNX_JWT_SECRET:-development-secret}
     depends_on:
       - postgres
       - redis

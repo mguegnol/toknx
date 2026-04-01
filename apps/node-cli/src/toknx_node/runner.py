@@ -9,21 +9,47 @@ from contextlib import suppress
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Awaitable, Callable, Protocol
 
 import httpx
 import websockets
 
 from toknx_node.client import ToknXClient
-from toknx_node.config import RuntimeState, StoredConfig, clear_runtime, save_runtime
+from toknx_node.config import (
+    PRODUCTION_API_BASE_URL,
+    RuntimeState,
+    StoredConfig,
+    clear_runtime,
+    save_runtime,
+)
+
+
+SendMessage = Callable[[dict], Awaitable[None]]
+
+
+class InferenceBackend(Protocol):
+    async def run_job(self, send_message: SendMessage, *, job_id: str, request_payload: dict) -> None:
+        ...
 
 
 @dataclass
 class StartOptions:
     models: list[str]
     capability_mode: str = "solo"
-    launch_exo: bool = False
-    mock_inference: bool = False
     exo_port: int = 52415
+
+
+@dataclass
+class ExoInferenceBackend:
+    exo_port: int
+
+    async def run_job(self, send_message: SendMessage, *, job_id: str, request_payload: dict) -> None:
+        await _run_exo_job(
+            send_message,
+            job_id=job_id,
+            request_payload=request_payload,
+            exo_port=self.exo_port,
+        )
 
 
 def discover_hardware() -> dict:
@@ -148,14 +174,6 @@ async def _ensure_exo_instance(model_id: str, exo_port: int) -> None:
     raise RuntimeError(f"exo instance for model {model_id} did not become ready")
 
 
-async def _run_mock_job(send_message, job_id: str) -> None:
-    text = "Mock ToknX response from contributor node."
-    for index, token in enumerate(text.split(), start=1):
-        await send_message({"type": "token", "job_id": job_id, "chunk": f"{token} ", "output_tokens": index})
-        await asyncio.sleep(0.15)
-    await send_message({"type": "completed", "job_id": job_id, "output_tokens": len(text.split())})
-
-
 async def _run_exo_job(send_message, *, job_id: str, request_payload: dict, exo_port: int) -> None:
     async with httpx.AsyncClient(timeout=None) as client:
         try:
@@ -195,9 +213,14 @@ async def _run_exo_job(send_message, *, job_id: str, request_payload: dict, exo_
             await send_message({"type": "failed", "job_id": job_id, "error": str(exc)})
 
 
-async def run_node(config: StoredConfig, options: StartOptions) -> None:
+async def run_node(
+    config: StoredConfig,
+    options: StartOptions,
+    *,
+    backend: InferenceBackend | None = None,
+) -> None:
     client = ToknXClient(
-        api_base_url=config.api_base_url,
+        api_base_url=PRODUCTION_API_BASE_URL,
         api_key=config.api_key,
         node_token=config.node_token,
     )
@@ -214,19 +237,20 @@ async def run_node(config: StoredConfig, options: StartOptions) -> None:
         )
     )
 
-    exo_process = None
-    if options.launch_exo:
-        exo_binary = shutil.which("exo")
-        if exo_binary is None:
-            raise RuntimeError("exo is not installed; run with --mock-inference or install exo")
-        exo_process = subprocess.Popen(  # noqa: S603
-            [exo_binary, "--api-port", str(options.exo_port)],
-            env=_build_exo_env(),
-            text=True,
-        )
-        await _wait_for_exo_api(options.exo_port, exo_process)
-        for model_id in options.models:
-            await _ensure_exo_instance(model_id, options.exo_port)
+    exo_binary = shutil.which("exo")
+    if exo_binary is None:
+        raise RuntimeError("exo is not installed")
+
+    exo_process = subprocess.Popen(  # noqa: S603
+        [exo_binary, "--api-port", str(options.exo_port)],
+        env=_build_exo_env(),
+        text=True,
+    )
+    await _wait_for_exo_api(options.exo_port, exo_process)
+    for model_id in options.models:
+        await _ensure_exo_instance(model_id, options.exo_port)
+    if backend is None:
+        backend = ExoInferenceBackend(exo_port=options.exo_port)
 
     shutdown = asyncio.Event()
 
@@ -254,15 +278,7 @@ async def run_node(config: StoredConfig, options: StartOptions) -> None:
 
                     async def handle_inference(job_id: str, request_payload: dict) -> None:
                         await send_message({"type": "accepted", "job_id": job_id})
-                        if options.mock_inference:
-                            await _run_mock_job(send_message, job_id)
-                        else:
-                            await _run_exo_job(
-                                send_message,
-                                job_id=job_id,
-                                request_payload=request_payload,
-                                exo_port=options.exo_port,
-                            )
+                        await backend.run_job(send_message, job_id=job_id, request_payload=request_payload)
 
                     while not shutdown.is_set():
                         raw_message = await websocket.recv()

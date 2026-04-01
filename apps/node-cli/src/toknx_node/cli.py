@@ -1,31 +1,34 @@
 import asyncio
 import secrets
-from pathlib import Path
 
 import typer
 
 from toknx_node.auth_flow import login_via_browser
 from toknx_node.client import ToknXClient
-from toknx_node.config import clear_runtime, load_config, load_runtime, save_config
+from toknx_node.config import (
+    PRODUCTION_API_BASE_URL,
+    StoredConfig,
+    clear_runtime,
+    load_config,
+    load_runtime,
+    save_config,
+)
 from toknx_node.runner import StartOptions, run_node
 
 app = typer.Typer(no_args_is_help=True)
 
 
 @app.command()
-def login(
-    api_base_url: str = typer.Option("http://localhost/api", help="Coordinator API base URL."),
-    username: str = typer.Option("localdev", help="Development username for local OAuth bypass."),
-) -> None:
+def login() -> None:
     state = secrets.token_urlsafe(16)
-    result = login_via_browser(api_base_url, state=state, username=username)
+    result = login_via_browser(PRODUCTION_API_BASE_URL, state=state)
     if result.get("state") != state:
         raise typer.BadParameter("oauth state mismatch")
-    config = load_config()
-    config.api_base_url = api_base_url
-    config.github_username = result["github_username"]
-    config.api_key = result["api_key"]
-    config.node_token = result["node_token"]
+    config = StoredConfig(
+        github_username=result["github_username"],
+        api_key=result["api_key"],
+        node_token=result["node_token"],
+    )
     save_config(config)
     typer.echo(f"Logged in as @{config.github_username}")
 
@@ -34,8 +37,6 @@ def login(
 def start(
     model: str = typer.Option(..., help="Comma-separated Hugging Face model ids."),
     capability_mode: str = typer.Option("solo", help="Node capability mode."),
-    launch_exo: bool = typer.Option(False, help="Start exo automatically."),
-    mock_inference: bool = typer.Option(False, help="Use a mock generator instead of exo."),
     exo_port: int = typer.Option(52415, help="Local exo API port."),
 ) -> None:
     config = load_config()
@@ -48,8 +49,6 @@ def start(
             StartOptions(
                 models=models,
                 capability_mode=capability_mode,
-                launch_exo=launch_exo,
-                mock_inference=mock_inference,
                 exo_port=exo_port,
             ),
         )
@@ -62,7 +61,7 @@ def status() -> None:
     runtime = load_runtime()
     typer.echo(f"Account: @{config.github_username or 'not logged in'}")
     if config.api_key and config.node_token:
-        client = ToknXClient(config.api_base_url, config.api_key, config.node_token)
+        client = ToknXClient(PRODUCTION_API_BASE_URL, config.api_key, config.node_token)
         try:
             balance = client.get_balance()
             typer.echo(f"Credits: {balance['balance']}")
@@ -81,7 +80,7 @@ def stop() -> None:
     config = load_config()
     runtime = load_runtime()
     if runtime.node_id and config.node_token:
-        client = ToknXClient(config.api_base_url, config.api_key, config.node_token)
+        client = ToknXClient(PRODUCTION_API_BASE_URL, config.api_key, config.node_token)
         try:
             client.deregister_node(runtime.node_id)
             typer.echo(f"Deregistered node {runtime.node_id}")
@@ -92,4 +91,3 @@ def stop() -> None:
 
 if __name__ == "__main__":
     app()
-

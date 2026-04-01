@@ -6,6 +6,8 @@ from typing import List, Optional
 from platformdirs import user_config_dir
 
 
+PRODUCTION_API_BASE_URL = "https://coordinator.toknx.dev"
+
 CONFIG_DIR = Path(user_config_dir("toknx", "toknx"))
 CONFIG_PATH = CONFIG_DIR / "config.json"
 RUNTIME_PATH = CONFIG_DIR / "runtime.json"
@@ -13,7 +15,6 @@ RUNTIME_PATH = CONFIG_DIR / "runtime.json"
 
 @dataclass
 class StoredConfig:
-    api_base_url: str = "http://localhost/api"
     github_username: str = ""
     api_key: str = ""
     node_token: str = ""

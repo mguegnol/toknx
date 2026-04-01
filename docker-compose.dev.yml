@@ -1,0 +1,4 @@
+services:
+  coordinator:
+    environment:
+      TOKNX_AUTH_DEV_BYPASS: "true"
