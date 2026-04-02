@@ -1,4 +1,4 @@
-FROM node:22-alpine AS build
+FROM node:24-alpine AS build
 
 WORKDIR /app
 COPY package.json svelte.config.js tsconfig.json vite.config.ts /app/
@@ -6,7 +6,7 @@ COPY src /app/src
 
 RUN npm install && npm run build
 
-FROM node:22-alpine
+FROM node:24-alpine
 
 WORKDIR /app
 COPY --from=build /app/package.json /app/package.json
@@ -17,4 +17,3 @@ ENV HOST=0.0.0.0
 ENV PORT=3000
 
 CMD ["node", "build"]
-
