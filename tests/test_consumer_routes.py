@@ -1,8 +1,10 @@
+import asyncio
+
 import pytest
 from sqlalchemy import select
 
 from toknx_coordinator.api.routes import consumer as consumer_routes
-from toknx_coordinator.db.models import Job
+from toknx_coordinator.db.models import Job, Node
 from toknx_coordinator.services.job_router import TunnelManager
 
 
@@ -36,8 +38,8 @@ async def _queued_job(execute_fn):
 
 async def _counting_execute(execute_fn, *args, **kwargs):
     statement = args[0]
-    statement_text = str(statement)
-    if "count" in statement_text.lower():
+    raw_columns = getattr(statement, "_raw_columns", ())
+    if any("count" in str(column).lower() for column in raw_columns):
         class Result:
             def scalar_one(self):
                 return 0
@@ -86,3 +88,106 @@ async def test_create_chat_completion_excludes_none_fields_from_forwarded_reques
         "messages": [{"role": "user", "content": "hi"}],
         "stream": False,
     }
+
+
+class FakeTunnelManager:
+    def __init__(self) -> None:
+        self.queue: asyncio.Queue[dict] | None = None
+        self.dispatched_request: dict | None = None
+
+    def open_job_stream(self, job_id: str) -> asyncio.Queue[dict]:
+        self.queue = asyncio.Queue()
+        return self.queue
+
+    def close_job_stream(self, job_id: str) -> None:
+        return None
+
+    async def dispatch(self, node_id: str, job: Job) -> None:
+        self.dispatched_request = job.request_payload
+        assert self.queue is not None
+        await self.queue.put(
+            {
+                "type": "token",
+                "job_id": job.id,
+                "chunk": "hello",
+                "output_tokens": 1,
+            }
+        )
+        await self.queue.put(
+            {
+                "type": "completed",
+                "job_id": job.id,
+                "output_tokens": 1,
+                "prompt_tokens": 7,
+            }
+        )
+
+
+@pytest.mark.anyio
+async def test_create_chat_completion_returns_prompt_tokens_in_usage(
+    monkeypatch,
+    db_session,
+    account_factory,
+):
+    consumer = await account_factory(db_session, github_id="gh-consumer-2", github_username="alice")
+    contributor = await account_factory(
+        db_session,
+        github_id="gh-contributor-1",
+        github_username="bob",
+        api_key="toknx_api_contributor",
+        node_token="toknx_node_contributor",
+    )
+    node = Node(
+        id="node-123",
+        account_id=contributor.id,
+        token_hash="node-hash",
+        committed_models=["mlx-community/Llama-3.2-1B-Instruct-4bit"],
+        hardware_spec={"chip": "M2", "ram_gb": 16},
+        status="online",
+        tunnel_connected=True,
+    )
+    db_session.add(node)
+    await db_session.commit()
+
+    payload = consumer_routes.ChatCompletionRequest(
+        model="mlx-community/Llama-3.2-1B-Instruct-4bit",
+        messages=[consumer_routes.Message(role="user", content="hi")],
+        stream=False,
+    )
+
+    async def _find_node(*_args, **_kwargs):
+        return node
+
+    monkeypatch.setattr(consumer_routes, "_find_node", _find_node)
+    monkeypatch.setattr(consumer_routes, "_active_jobs_for_account", _zero_inflight)
+    monkeypatch.setattr(consumer_routes, "resolve_or_create_model", _resolve_model)
+    original_execute = db_session.execute
+    monkeypatch.setattr(
+        db_session,
+        "execute",
+        lambda *args, **kwargs: _counting_execute(original_execute, *args, **kwargs),
+    )
+
+    tunnel_manager = FakeTunnelManager()
+    response = await consumer_routes.create_chat_completion(
+        payload=payload,
+        account=consumer,
+        session=db_session,
+        tunnel_manager=tunnel_manager,
+    )
+
+    job = await _queued_job(original_execute)
+
+    assert tunnel_manager.dispatched_request == {
+        "model": "mlx-community/Llama-3.2-1B-Instruct-4bit",
+        "messages": [{"role": "user", "content": "hi"}],
+        "stream": False,
+    }
+    assert response["usage"] == {
+        "prompt_tokens": 7,
+        "completion_tokens": 1,
+        "total_tokens": 8,
+    }
+    assert job.prompt_tokens == 7
+    assert job.output_tokens == 1
+    assert job.status == "completed"

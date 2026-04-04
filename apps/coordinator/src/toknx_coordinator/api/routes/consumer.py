@@ -116,13 +116,14 @@ async def create_chat_completion(
         await session.commit()
         raise HTTPException(status_code=503, detail="selected node became unavailable") from exc
 
-    async def _finalize(output_tokens: int) -> None:
+    async def _finalize(output_tokens: int, prompt_tokens: int = 0) -> None:
         refreshed_job = await session.get(Job, job.id)
         refreshed_node = await session.get(Node, node.id)
         if refreshed_job is None or refreshed_node is None:
             return
         refreshed_job.output_tokens = output_tokens
-        refreshed_job.status = "completed"
+        if prompt_tokens > 0:
+            refreshed_job.prompt_tokens = prompt_tokens
         refreshed_job.completed_at = datetime.now(timezone.utc)
         contributor_account = await session.get(Account, refreshed_node.account_id)
         if contributor_account:
@@ -133,6 +134,7 @@ async def create_chat_completion(
                 credits_per_1k=model.credits_per_1k_tokens,
                 contributor_account_id=contributor_account.id,
             )
+        refreshed_job.status = "completed"
         await session.commit()
 
     async def stream_response():
@@ -150,7 +152,8 @@ async def create_chat_completion(
                         yield f"data: {json.dumps({'choices': [{'delta': {'content': chunk}}]})}\n\n"
                     elif event_type == "completed":
                         output_tokens = int(message.get("output_tokens", output_tokens))
-                        await _finalize(output_tokens)
+                        prompt_tokens = int(message.get("prompt_tokens", 0))
+                        await _finalize(output_tokens, prompt_tokens)
                         yield "data: [DONE]\n\n"
                         break
                     elif event_type == "failed":
@@ -175,6 +178,7 @@ async def create_chat_completion(
         return StreamingResponse(stream_response(), media_type="text/event-stream")
 
     output_tokens = 0
+    prompt_tokens = 0
     fragments: list[str] = []
     try:
         try:
@@ -186,7 +190,8 @@ async def create_chat_completion(
                     output_tokens = int(message.get("output_tokens", output_tokens))
                 elif event_type == "completed":
                     output_tokens = int(message.get("output_tokens", output_tokens))
-                    await _finalize(output_tokens)
+                    prompt_tokens = int(message.get("prompt_tokens", 0))
+                    await _finalize(output_tokens, prompt_tokens)
                     break
                 elif event_type == "failed":
                     job.status = "failed"
@@ -216,8 +221,8 @@ async def create_chat_completion(
             }
         ],
         "usage": {
-            "prompt_tokens": 0,
+            "prompt_tokens": prompt_tokens,
             "completion_tokens": output_tokens,
-            "total_tokens": output_tokens,
+            "total_tokens": prompt_tokens + output_tokens,
         },
     }

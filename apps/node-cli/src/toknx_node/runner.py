@@ -113,21 +113,30 @@ async def _run_mlx_lm_job(send_message, *, job_id: str, request_payload: dict, p
             async with client.stream(
                 "POST",
                 f"http://127.0.0.1:{port}/v1/chat/completions",
-                json=request_payload | {"stream": True},
+                json=request_payload | {"stream": True, "stream_options": {"include_usage": True}},
             ) as response:
                 response.raise_for_status()
                 output_tokens = 0
+                prompt_tokens = 0
                 async for line in response.aiter_lines():
                     if not line.startswith("data: "):
                         continue
                     payload = line[6:]
                     if payload == "[DONE]":
-                        await send_message({"type": "completed", "job_id": job_id, "output_tokens": output_tokens})
+                        await send_message({"type": "completed", "job_id": job_id, "output_tokens": output_tokens, "prompt_tokens": prompt_tokens})
                         return
                     event = json.loads(payload)
-                    delta = event.get("choices", [{}])[0].get("delta", {}).get("content", "")
+                    usage = event.get("usage")
+                    if usage:
+                        if "completion_tokens" in usage:
+                            output_tokens = int(usage["completion_tokens"])
+                        if "prompt_tokens" in usage:
+                            prompt_tokens = int(usage["prompt_tokens"])
+                    choices = event.get("choices") or [{}]
+                    delta = choices[0].get("delta", {}).get("content", "")
                     if delta:
-                        output_tokens += 1
+                        if not usage:
+                            output_tokens += 1
                         await send_message(
                             {
                                 "type": "token",

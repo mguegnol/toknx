@@ -70,3 +70,80 @@ async def test_mlx_lm_inference_backend_rejects_unknown_model():
             "error": "model not loaded: mlx-community/Qwen2.5-Coder-7B-Instruct-4bit",
         }
     ]
+
+
+@pytest.mark.anyio
+async def test_run_mlx_lm_job_requests_stream_usage(monkeypatch):
+    captured: dict = {}
+    events: list[dict] = []
+
+    class FakeResponse:
+        @staticmethod
+        def raise_for_status() -> None:
+            return None
+
+        async def aiter_lines(self):
+            yield 'data: {"choices":[{"delta":{"content":"hello"}}]}'
+            yield 'data: {"choices":[],"usage":{"prompt_tokens":7,"completion_tokens":1,"total_tokens":8}}'
+            yield "data: [DONE]"
+
+    class FakeStreamContext:
+        async def __aenter__(self):
+            return FakeResponse()
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            captured["client_kwargs"] = kwargs
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        def stream(self, method: str, url: str, *, json: dict):
+            captured["method"] = method
+            captured["url"] = url
+            captured["json"] = json
+            return FakeStreamContext()
+
+    async def send_message(payload: dict) -> None:
+        events.append(payload)
+
+    monkeypatch.setattr(runner.httpx, "AsyncClient", FakeAsyncClient)
+
+    await runner._run_mlx_lm_job(
+        send_message,
+        job_id="job-123",
+        request_payload={
+            "model": "mlx-community/Llama-3.2-1B-Instruct-4bit",
+            "messages": [{"role": "user", "content": "hi"}],
+        },
+        port=52415,
+    )
+
+    assert captured["method"] == "POST"
+    assert captured["url"] == "http://127.0.0.1:52415/v1/chat/completions"
+    assert captured["json"] == {
+        "model": "mlx-community/Llama-3.2-1B-Instruct-4bit",
+        "messages": [{"role": "user", "content": "hi"}],
+        "stream": True,
+        "stream_options": {"include_usage": True},
+    }
+    assert events == [
+        {
+            "type": "token",
+            "job_id": "job-123",
+            "chunk": "hello",
+            "output_tokens": 1,
+        },
+        {
+            "type": "completed",
+            "job_id": "job-123",
+            "output_tokens": 1,
+            "prompt_tokens": 7,
+        },
+    ]

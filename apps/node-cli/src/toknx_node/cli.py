@@ -28,7 +28,7 @@ from toknx_node.config import (
 )
 from toknx_node.runner import StartOptions, run_node
 
-app = typer.Typer(no_args_is_help=True)
+app = typer.Typer(no_args_is_help=True, add_completion=False)
 
 DAEMON_LOG_PATH = CONFIG_DIR / "node.log"
 

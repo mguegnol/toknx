@@ -2,13 +2,12 @@
 
 set -euo pipefail
 
-TOKNX_INSTALL_ARCHIVE_URL="${TOKNX_INSTALL_ARCHIVE_URL:-https://github.com/toknx/toknx/archive/refs/heads/main.tar.gz}"
-TOKNX_TMP_DIR="${TOKNX_TMP_DIR:-}"
-TOKNX_PYTHON_VERSION="${TOKNX_PYTHON_VERSION:-3.12}"
-TOKNX_MLX_LM_PACKAGE_SPEC="${TOKNX_MLX_LM_PACKAGE_SPEC:-mlx-lm==0.31.1}"
+REPO_RAW_BASE_URL="${TOKNX_INSTALL_RAW_BASE_URL:-https://raw.githubusercontent.com/mguegnol/toknx/main}"
+PYTHON_VERSION="3.12"
+MLX_LM_PACKAGE="mlx-lm==0.31.1"
 
 log() {
-  printf '==> %s\n' "$1"
+  printf '==> %s\n' "$1" >&2
 }
 
 fail() {
@@ -20,117 +19,97 @@ require_cmd() {
   command -v "$1" >/dev/null 2>&1 || fail "missing required command: $1"
 }
 
-validate_mlx_lm_runtime() {
-  if ! command -v mlx_lm.server >/dev/null 2>&1; then
-    fail "mlx_lm.server was not installed"
-  fi
-
-  local help_output
-  if ! help_output="$(PAGER=cat mlx_lm.server --help 2>&1)"; then
-    cat >&2 <<EOF
-error: mlx-lm installed, but the runtime is not usable.
-
-mlx_lm.server --help failed with:
-${help_output}
-EOF
-    exit 1
-  fi
-}
-
 require_metal_toolchain() {
-  local probe_output
+  local output
 
-  if probe_output="$(xcrun metal -v 2>&1)"; then
+  if output="$(xcrun metal -v 2>&1)"; then
     return
   fi
 
-  if [[ "$probe_output" == *"missing Metal Toolchain"* ]]; then
+  if [[ "$output" == *"missing Metal Toolchain"* ]]; then
     cat >&2 <<'EOF'
-error: mlx-lm requires the Apple Metal Toolchain, but it is not installed.
+error: mlx-lm requires the Apple Metal Toolchain.
 
 Install it with:
   xcodebuild -downloadComponent MetalToolchain
 
-Then rerun:
-  ./install-node.sh
+Then rerun the installer.
 EOF
     exit 1
   fi
 
-  fail "unable to validate the Apple Metal Toolchain: ${probe_output}"
+  fail "unable to validate the Apple Metal Toolchain: ${output}"
 }
 
-detect_source_dir() {
-  local script_dir
-  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  if [[ -f "${script_dir}/apps/node-cli/pyproject.toml" ]]; then
-    printf '%s\n' "$script_dir"
-    return
+validate_mlx_lm_runtime() {
+  command -v mlx_lm.server >/dev/null 2>&1 || fail "mlx_lm.server was not installed"
+
+  local output
+  if ! output="$(PAGER=cat mlx_lm.server --help 2>&1)"; then
+    cat >&2 <<EOF
+error: mlx-lm installed, but the runtime is not usable.
+
+mlx_lm.server --help failed with:
+${output}
+EOF
+    exit 1
   fi
-  printf '%s\n' ""
 }
 
-download_source_dir() {
-  local tmp_root archive_path extracted_dir
-  if [[ -n "$TOKNX_TMP_DIR" ]]; then
-    tmp_root="$TOKNX_TMP_DIR"
-    mkdir -p "$tmp_root"
-  else
-    tmp_root="$(mktemp -d)"
-  fi
-  archive_path="${tmp_root}/toknx.tar.gz"
-  extracted_dir="${tmp_root}/src"
-  mkdir -p "$extracted_dir"
+download_node_cli() {
+  local tmp_dir destination relative_path
+  tmp_dir="$(mktemp -d)"
+  mkdir -p "${tmp_dir}/apps/node-cli/src/toknx_node"
 
-  log "Downloading toknX source archive"
-  curl -fsSL "$TOKNX_INSTALL_ARCHIVE_URL" -o "$archive_path"
-  tar -xzf "$archive_path" -C "$extracted_dir"
+  while IFS= read -r relative_path; do
+    destination="${tmp_dir}/${relative_path}"
+    mkdir -p "$(dirname "$destination")"
+    curl -fsSL "${REPO_RAW_BASE_URL}/${relative_path}" -o "$destination" \
+      || fail "failed to download ${relative_path}"
+  done <<'EOF'
+apps/node-cli/pyproject.toml
+apps/node-cli/src/toknx_node/__init__.py
+apps/node-cli/src/toknx_node/auth_flow.py
+apps/node-cli/src/toknx_node/cli.py
+apps/node-cli/src/toknx_node/client.py
+apps/node-cli/src/toknx_node/config.py
+apps/node-cli/src/toknx_node/runner.py
+EOF
 
-  find "$extracted_dir" -mindepth 1 -maxdepth 1 -type d | head -n 1
+  [[ -f "${tmp_dir}/apps/node-cli/pyproject.toml" ]] || fail "node CLI source not found"
+
+  printf '%s\n' "$tmp_dir"
 }
 
 main() {
   require_cmd curl
-  require_cmd tar
   require_cmd uv
 
   if [[ "$(uname -s)" != "Darwin" ]]; then
     log "Non-macOS host detected. toknX nodes are intended for Apple Silicon Macs."
   fi
 
-  local source_dir tool_bin_dir local_source_dir=0
-  source_dir="$(detect_source_dir)"
-  if [[ -z "$source_dir" ]]; then
-    source_dir="$(download_source_dir)"
-  else
-    local_source_dir=1
-  fi
+  local tmp_dir tool_bin_dir
+  tmp_dir="$(download_node_cli)"
+  trap "rm -rf '$tmp_dir'" EXIT
 
-  [[ -f "${source_dir}/apps/node-cli/pyproject.toml" ]] || fail "node CLI source not found"
-
-  log "Installing Python ${TOKNX_PYTHON_VERSION} with uv"
-  uv python install "$TOKNX_PYTHON_VERSION" >/dev/null
+  log "Installing Python ${PYTHON_VERSION} with uv"
+  uv python install "$PYTHON_VERSION" >/dev/null
 
   log "Installing toknX CLI"
-  if [[ "$local_source_dir" == "1" ]]; then
-    uv tool install \
-      --python "$TOKNX_PYTHON_VERSION" \
-      --editable \
-      --force \
-      "${source_dir}/apps/node-cli" >/dev/null
-  else
-    uv tool install \
-      --python "$TOKNX_PYTHON_VERSION" \
-      --force \
-      "${source_dir}/apps/node-cli" >/dev/null
-  fi
+  uv tool install \
+    --python "$PYTHON_VERSION" \
+    --force \
+    "${tmp_dir}/apps/node-cli" >/dev/null
 
   require_metal_toolchain
+
   log "Installing mlx-lm"
   uv tool install \
-    --python "$TOKNX_PYTHON_VERSION" \
+    --python "$PYTHON_VERSION" \
     --force \
-    "$TOKNX_MLX_LM_PACKAGE_SPEC" >/dev/null
+    "$MLX_LM_PACKAGE" >/dev/null
+
   validate_mlx_lm_runtime
 
   tool_bin_dir="$(uv tool dir --bin)"
