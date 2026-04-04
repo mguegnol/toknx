@@ -13,7 +13,6 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "ToknX Coordinator"
-    app_env: str = "development"
     database_url: str = "sqlite+aiosqlite:///./toknx.db"
     redis_url: str = "redis://localhost:6379/0"
     public_base_url: AnyHttpUrl = "http://localhost:8000"
@@ -34,8 +33,7 @@ class Settings(BaseSettings):
     account_inflight_limit: int = 5
     node_keepalive_seconds: int = 30
     node_offline_after_seconds: int = 90
-    launch_fee_percent: int = 5
-    standard_fee_percent: int = 10
+    fee_percent: int = 10
 
 
 @lru_cache(maxsize=1)

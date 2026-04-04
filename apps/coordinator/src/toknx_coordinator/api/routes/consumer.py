@@ -84,7 +84,7 @@ async def create_chat_completion(
     job = Job(
         account_id=account.id,
         model=payload.model,
-        request_payload=payload.model_dump(mode="json"),
+        request_payload=payload.model_dump(mode="json", exclude_none=True),
         status="queued",
     )
     session.add(job)

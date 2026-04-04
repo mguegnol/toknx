@@ -191,15 +191,15 @@ One GitHub OAuth → one ToknX account → one API key + one node token → one 
 - [ ] Slack webhook alerts: no nodes online (2m), job failure rate > 10% (5m), queue depth > 50 (5m)
 
 ### Phase 2 — Node CLI
-**Goal**: Contributor runs one command, exo starts, tunnel opens, node earns credits.
+**Goal**: Contributor runs one command, mlx-lm starts, tunnel opens, node earns credits.
 
 - [ ] Scaffold Python CLI package
 - [ ] `toknx login`: authenticate against ToknX account (GitHub OAuth via browser redirect → local callback)
 - [ ] `toknx start --model <hf_id>[,<hf_id>...]`:
-  - Check exo installed (guide to install if not)
+  - Check mlx-lm installed (guide to install if not)
   - Validate all models are valid MLX format
-  - Download committed models via exo
-  - Start exo as subprocess
+  - Download committed models via mlx-lm
+  - Start mlx-lm as subprocess
   - Status `starting` until all models loaded → `online`
 - [ ] `POST /nodes/register` with committed models, hardware specs (RAM, chip), capability mode → JWT
 - [ ] Open persistent WS to `wss://coordinator.toknx.dev/nodes/tunnel`
@@ -207,7 +207,7 @@ One GitHub OAuth → one ToknX account → one API key + one node token → one 
 - [ ] Send completion message with `output_tokens` count
 - [ ] Auto-reconnect: exponential backoff (1s → 2s → 4s → max 60s)
 - [ ] `toknx status`: credits earned, active jobs, committed models, tunnel state, uptime
-- [ ] `toknx stop`: graceful shutdown — drain in-flight jobs, deregister, close tunnel, stop exo
+- [ ] `toknx stop`: graceful shutdown — drain in-flight jobs, deregister, close tunnel, stop mlx-lm
 
 ### Phase 3 — Dashboard + Launch
 **Goal**: Network is live, dashboard looks alive, ready to share.
@@ -306,8 +306,8 @@ GET    /events/stream           SSE stream of public network events (no auth)
 | Coordinator API | Python 3.12 + FastAPI |
 | Job queue / live node state | Redis |
 | Credit ledger / nodes / jobs | PostgreSQL |
-| Node inference | exo (Apple MLX) |
-| Node CLI | Python 3.12 (wraps exo) |
+| Node inference | mlx-lm (Apple MLX) |
+| Node CLI | Python 3.12 (wraps mlx-lm) |
 | Node↔Coordinator control | WebSocket (node-initiated, persistent) |
 | Dashboard | SvelteKit (SSR + client-side reactivity) |
 | Auth | GitHub OAuth + Cloudflare Turnstile |

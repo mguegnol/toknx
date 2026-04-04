@@ -1,10 +1,14 @@
 import json
+import os
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import List, Optional
 
 from platformdirs import user_config_dir
 
+
+PRODUCTION_API_BASE_URL = "https://coordinator.toknx.dev"
+API_BASE_URL_ENV_VAR = "TOKNX_API_BASE_URL"
 
 CONFIG_DIR = Path(user_config_dir("toknx", "toknx"))
 CONFIG_PATH = CONFIG_DIR / "config.json"
@@ -13,7 +17,6 @@ RUNTIME_PATH = CONFIG_DIR / "runtime.json"
 
 @dataclass
 class StoredConfig:
-    api_base_url: str = "http://localhost/api"
     github_username: str = ""
     api_key: str = ""
     node_token: str = ""
@@ -51,3 +54,7 @@ def save_runtime(runtime: RuntimeState) -> None:
 def clear_runtime() -> None:
     if RUNTIME_PATH.exists():
         RUNTIME_PATH.unlink()
+
+
+def get_api_base_url() -> str:
+    return os.getenv(API_BASE_URL_ENV_VAR, PRODUCTION_API_BASE_URL)

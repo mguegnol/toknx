@@ -109,8 +109,7 @@ async def settle_job(
 
     output_tokens = max(job.output_tokens, 0)
     total_credits = max(1, round((output_tokens / 1000) * credits_per_1k))
-    coordinator_percent = settings.launch_fee_percent if settings.app_env == "launch" else settings.standard_fee_percent
-    coordinator_credits = round(total_credits * (coordinator_percent / 100))
+    coordinator_credits = round(total_credits * (settings.fee_percent / 100))
     contributor_credits = total_credits - coordinator_credits
 
     if consumer_balance.balance < total_credits:

@@ -4,10 +4,8 @@ set -euo pipefail
 
 TOKNX_INSTALL_ARCHIVE_URL="${TOKNX_INSTALL_ARCHIVE_URL:-https://github.com/toknx/toknx/archive/refs/heads/main.tar.gz}"
 TOKNX_TMP_DIR="${TOKNX_TMP_DIR:-}"
-TOKNX_SKIP_EXO="${TOKNX_SKIP_EXO:-0}"
 TOKNX_PYTHON_VERSION="${TOKNX_PYTHON_VERSION:-3.12}"
-TOKNX_EXO_PYTHON_VERSION="${TOKNX_EXO_PYTHON_VERSION:-3.13}"
-TOKNX_EXO_PACKAGE_SPEC="${TOKNX_EXO_PACKAGE_SPEC:-git+https://github.com/exo-explore/exo.git@main}"
+TOKNX_MLX_LM_PACKAGE_SPEC="${TOKNX_MLX_LM_PACKAGE_SPEC:-mlx-lm==0.31.1}"
 
 log() {
   printf '==> %s\n' "$1"
@@ -22,6 +20,23 @@ require_cmd() {
   command -v "$1" >/dev/null 2>&1 || fail "missing required command: $1"
 }
 
+validate_mlx_lm_runtime() {
+  if ! command -v mlx_lm.server >/dev/null 2>&1; then
+    fail "mlx_lm.server was not installed"
+  fi
+
+  local help_output
+  if ! help_output="$(PAGER=cat mlx_lm.server --help 2>&1)"; then
+    cat >&2 <<EOF
+error: mlx-lm installed, but the runtime is not usable.
+
+mlx_lm.server --help failed with:
+${help_output}
+EOF
+    exit 1
+  fi
+}
+
 require_metal_toolchain() {
   local probe_output
 
@@ -31,16 +46,13 @@ require_metal_toolchain() {
 
   if [[ "$probe_output" == *"missing Metal Toolchain"* ]]; then
     cat >&2 <<'EOF'
-error: exo requires the Apple Metal Toolchain, but it is not installed.
+error: mlx-lm requires the Apple Metal Toolchain, but it is not installed.
 
 Install it with:
   xcodebuild -downloadComponent MetalToolchain
 
 Then rerun:
   ./install-node.sh
-
-If you only want to test ToknX without real local inference, rerun with:
-  TOKNX_SKIP_EXO=1 ./install-node.sh
 EOF
     exit 1
   fi
@@ -86,7 +98,7 @@ main() {
     log "Non-macOS host detected. ToknX nodes are intended for Apple Silicon Macs."
   fi
 
-  local source_dir tool_bin_dir local_source_dir=0 exo_missing=0
+  local source_dir tool_bin_dir local_source_dir=0
   source_dir="$(detect_source_dir)"
   if [[ -z "$source_dir" ]]; then
     source_dir="$(download_source_dir)"
@@ -113,26 +125,20 @@ main() {
       "${source_dir}/apps/node-cli" >/dev/null
   fi
 
-  if [[ "$TOKNX_SKIP_EXO" != "1" ]]; then
-    require_metal_toolchain
-    log "Installing exo"
-    uv python install "$TOKNX_EXO_PYTHON_VERSION" >/dev/null
-    uv tool install \
-      --python "$TOKNX_EXO_PYTHON_VERSION" \
-      --force \
-      "$TOKNX_EXO_PACKAGE_SPEC" >/dev/null
-  fi
+  require_metal_toolchain
+  log "Installing mlx-lm"
+  uv tool install \
+    --python "$TOKNX_PYTHON_VERSION" \
+    --force \
+    "$TOKNX_MLX_LM_PACKAGE_SPEC" >/dev/null
+  validate_mlx_lm_runtime
 
   tool_bin_dir="$(uv tool dir --bin)"
 
   log "ToknX CLI installed"
   printf 'tool bin dir: %s\n' "$tool_bin_dir"
 
-  if [[ "$TOKNX_SKIP_EXO" != "1" ]] && ! command -v exo >/dev/null 2>&1; then
-    exo_missing=1
-  fi
-
-  if ! command -v toknx >/dev/null 2>&1 || [[ "$exo_missing" == "1" ]]; then
+  if ! command -v toknx >/dev/null 2>&1 || ! command -v mlx_lm.server >/dev/null 2>&1; then
     cat <<EOF
 
 Add uv's tool bin directory to your PATH if needed:
@@ -143,12 +149,8 @@ EOF
   cat <<'EOF'
 
 Next steps:
-  1. toknx login --api-base-url http://localhost/api --username YOUR_GITHUB_NAME
-  2. toknx start --model mlx-community/Qwen2.5-Coder-7B-Instruct-4bit --launch-exo
-
-If you only want to test tunnel wiring without exo:
-  - rerun with TOKNX_SKIP_EXO=1
-  - then use `toknx start --model ... --mock-inference`
+  1. toknx login
+  2. toknx start --model mlx-community/Qwen2.5-Coder-7B-Instruct-4bit
 EOF
 }
 

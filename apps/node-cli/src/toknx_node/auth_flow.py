@@ -18,11 +18,11 @@ class CallbackHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b"ToknX login complete. You can close this window.")
 
-    def log_message(self, format: str, *args) -> None:  # noqa: A003
-        return
+def log_message(self, format: str, *args) -> None:  # noqa: A003
+    return
 
 
-def login_via_browser(api_base_url: str, *, state: str, username: str) -> dict:
+def login_via_browser(api_base_url: str, *, state: str) -> dict:
     callback_host = "127.0.0.1"
     callback_port = 8787
     callback_url = f"http://{callback_host}:{callback_port}/callback"
@@ -36,7 +36,6 @@ def login_via_browser(api_base_url: str, *, state: str, username: str) -> dict:
         {
             "redirect_uri": callback_url,
             "state": state,
-            "username": username,
         }
     )
     webbrowser.open(f"{api_base_url}/auth/github?{params}")

@@ -21,7 +21,7 @@ settings = get_settings()
 async def github_auth(
     redirect_uri: str | None = Query(default=None),
     state: str | None = Query(default=None),
-    username: str | None = Query(default="localdev"),
+    username: str | None = Query(default=None),
 ):
     callback_params = {}
     if redirect_uri:
