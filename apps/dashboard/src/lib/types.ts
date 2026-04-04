@@ -15,7 +15,8 @@ export type ModelRow = {
 
 export type Leader = {
 	github_username: string;
-	credits_earned: number;
+	credits_earned: string;
+	credits_earned_subcredits: number;
 };
 
 export type EventRow = {
@@ -28,4 +29,3 @@ export type EventRow = {
 		ram_gb?: number;
 	};
 };
-

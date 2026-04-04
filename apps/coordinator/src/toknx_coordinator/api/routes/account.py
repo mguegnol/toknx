@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from toknx_coordinator.api.deps import get_api_account, get_db_session
 from toknx_coordinator.db.models import Account, CreditBalance, CreditTransaction
+from toknx_coordinator.services.credit_units import format_subcredits
 from toknx_coordinator.services.credits import ensure_credit_balance, lock_stake
 
 router = APIRouter(tags=["account"])
@@ -26,17 +27,22 @@ async def account_balance(
     return {
         "account_id": account.id,
         "github_username": account.github_username,
-        "balance": balance.balance,
-        "total_earned": balance.total_earned,
-        "total_spent": balance.total_spent,
+        "balance": format_subcredits(balance.balance),
+        "balance_subcredits": balance.balance,
+        "total_earned": format_subcredits(balance.total_earned),
+        "total_earned_subcredits": balance.total_earned,
+        "total_spent": format_subcredits(balance.total_spent),
+        "total_spent_subcredits": balance.total_spent,
         "transactions": [
             {
                 "id": tx.id,
-                "amount": tx.amount,
+                "amount": format_subcredits(tx.amount),
+                "amount_subcredits": tx.amount,
                 "type": tx.tx_type,
                 "job_id": tx.job_id,
                 "node_id": tx.node_id,
-                "balance_after": tx.balance_after,
+                "balance_after": format_subcredits(tx.balance_after),
+                "balance_after_subcredits": tx.balance_after,
                 "created_at": tx.created_at.isoformat(),
             }
             for tx in transactions
@@ -59,4 +65,3 @@ async def create_stake(
         "amount": stake.amount,
         "status": stake.status,
     }
-

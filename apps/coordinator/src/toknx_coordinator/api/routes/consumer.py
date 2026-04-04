@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from toknx_coordinator.api.deps import get_api_account, get_db_session, get_tunnel_manager
 from toknx_coordinator.core.config import get_settings
 from toknx_coordinator.db.models import Account, CreditBalance, Job, Node
+from toknx_coordinator.services.credit_units import credits_to_subcredits
 from toknx_coordinator.services.credits import ensure_credit_balance, settle_job
 from toknx_coordinator.services.events import EventBus
 from toknx_coordinator.services.job_router import TunnelManager
@@ -79,7 +80,7 @@ async def create_chat_completion(
 
     balance = await ensure_credit_balance(session, account)
     model = await resolve_or_create_model(session, payload.model)
-    if balance.balance < model.credits_per_1k_tokens:
+    if balance.balance < credits_to_subcredits(model.credits_per_1k_tokens):
         raise HTTPException(status_code=402, detail="insufficient credits")
     job = Job(
         account_id=account.id,

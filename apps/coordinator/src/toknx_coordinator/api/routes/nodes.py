@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from toknx_coordinator.api.deps import get_db_session, get_node_account, get_tunnel_manager
 from toknx_coordinator.core.config import get_settings
 from toknx_coordinator.db.models import Account, Node, Stake
+from toknx_coordinator.services.credit_units import credits_to_subcredits
 from toknx_coordinator.services.credits import lock_stake, refund_stake
 from toknx_coordinator.services.job_router import TunnelManager
 from toknx_coordinator.services.model_registry import resolve_or_create_model
@@ -65,7 +66,7 @@ async def register_node(
         committed_models=payload.committed_models,
         hardware_spec=payload.hardware_spec | {"capability_mode": payload.capability_mode},
         status="starting",
-        stake_balance=settings.node_stake_credits,
+        stake_balance=credits_to_subcredits(settings.node_stake_credits),
     )
     session.add(node)
     await session.flush()

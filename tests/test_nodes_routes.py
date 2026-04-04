@@ -5,6 +5,7 @@ from sqlalchemy import select
 
 from toknx_coordinator.api.routes import nodes as node_routes
 from toknx_coordinator.db.models import CreditBalance, Stake
+from toknx_coordinator.services.credit_units import credits_to_subcredits
 
 
 @pytest.mark.anyio
@@ -14,7 +15,7 @@ async def test_register_node_returns_explicit_tunnel_url(
     account_factory,
 ):
     monkeypatch.setattr(node_routes.settings, "jwt_secret", "jwt-secret-with-sufficient-length")
-    monkeypatch.setattr(node_routes.settings, "node_tunnel_public_base_url", "wss://nodes.toknx.dev")
+    monkeypatch.setattr(node_routes.settings, "node_tunnel_public_base_url", "wss://nodes.toknx.co")
     account = await account_factory(db_session, github_id="gh-1", github_username="alice")
 
     payload = node_routes.NodeRegisterRequest(
@@ -24,7 +25,7 @@ async def test_register_node_returns_explicit_tunnel_url(
     )
     result = await node_routes.register_node(payload=payload, account=account, session=db_session)
 
-    assert result["tunnel_url"].startswith("wss://nodes.toknx.dev/nodes/tunnel?token=")
+    assert result["tunnel_url"].startswith("wss://nodes.toknx.co/nodes/tunnel?token=")
     assert result["tunnel_token"] in result["tunnel_url"]
 
 
@@ -67,6 +68,8 @@ async def test_register_node_locks_stake_against_account_balance(monkeypatch, db
     ).scalar_one()
 
     assert balance is not None
-    assert balance.balance == node_routes.settings.coordinator_signup_bonus - node_routes.settings.node_stake_credits
+    assert balance.balance == credits_to_subcredits(
+        node_routes.settings.coordinator_signup_bonus - node_routes.settings.node_stake_credits
+    )
     assert stake.status == "active"
-    assert stake.amount == node_routes.settings.node_stake_credits
+    assert stake.amount == credits_to_subcredits(node_routes.settings.node_stake_credits)

@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from toknx_coordinator.core.config import get_settings
 from toknx_coordinator.db.models import Account, CreditBalance, CreditTransaction, Job, Stake
+from toknx_coordinator.services.credit_units import credits_to_subcredits, tokens_to_subcredits
 
 
 settings = get_settings()
@@ -12,19 +13,20 @@ async def ensure_credit_balance(session: AsyncSession, account: Account) -> Cred
     balance = await session.get(CreditBalance, account.id)
     if balance:
         return balance
+    signup_bonus = credits_to_subcredits(settings.coordinator_signup_bonus)
     balance = CreditBalance(
         account_id=account.id,
-        balance=settings.coordinator_signup_bonus,
-        total_earned=settings.coordinator_signup_bonus,
+        balance=signup_bonus,
+        total_earned=signup_bonus,
         total_spent=0,
     )
     session.add(balance)
     session.add(
         CreditTransaction(
             account_id=account.id,
-            amount=settings.coordinator_signup_bonus,
+            amount=signup_bonus,
             tx_type="signup_bonus",
-            balance_after=settings.coordinator_signup_bonus,
+            balance_after=signup_bonus,
         )
     )
     await session.flush()
@@ -45,7 +47,8 @@ async def _get_credit_balance_for_update(session: AsyncSession, account_id: str)
 async def lock_stake(session: AsyncSession, account: Account, *, node_id: str | None = None) -> Stake:
     await ensure_credit_balance(session, account)
     balance = await _get_credit_balance_for_update(session, account.id)
-    if balance.balance < settings.node_stake_credits:
+    stake_amount = credits_to_subcredits(settings.node_stake_credits)
+    if balance.balance < stake_amount:
         raise ValueError("insufficient credits for stake")
 
     active_stake = (
@@ -60,14 +63,14 @@ async def lock_stake(session: AsyncSession, account: Account, *, node_id: str | 
     if active_stake:
         return active_stake
 
-    balance.balance -= settings.node_stake_credits
-    balance.total_spent += settings.node_stake_credits
-    stake = Stake(account_id=account.id, node_id=node_id, amount=settings.node_stake_credits, status="active")
+    balance.balance -= stake_amount
+    balance.total_spent += stake_amount
+    stake = Stake(account_id=account.id, node_id=node_id, amount=stake_amount, status="active")
     session.add(stake)
     session.add(
         CreditTransaction(
             account_id=account.id,
-            amount=-settings.node_stake_credits,
+            amount=-stake_amount,
             tx_type="stake_lock",
             node_id=node_id,
             balance_after=balance.balance,
@@ -107,9 +110,8 @@ async def settle_job(
     consumer_balance = await _get_credit_balance_for_update(session, job.account_id)
     contributor_balance = await _get_credit_balance_for_update(session, contributor_account_id)
 
-    output_tokens = max(job.output_tokens, 0)
-    total_credits = max(1, round((output_tokens / 1000) * credits_per_1k))
-    coordinator_credits = round(total_credits * (settings.fee_percent / 100))
+    total_credits = tokens_to_subcredits(job.output_tokens, credits_per_1k)
+    coordinator_credits = (total_credits * settings.fee_percent) // 100
     contributor_credits = total_credits - coordinator_credits
 
     if consumer_balance.balance < total_credits:
@@ -124,16 +126,18 @@ async def settle_job(
     job.credits_contributor = contributor_credits
     job.credits_coordinator = coordinator_credits
 
-    session.add_all(
-        [
-            CreditTransaction(
-                account_id=job.account_id,
-                amount=-total_credits,
-                tx_type="job_spent",
-                job_id=job.id,
-                node_id=job.node_id,
-                balance_after=consumer_balance.balance,
-            ),
+    transactions = [
+        CreditTransaction(
+            account_id=job.account_id,
+            amount=-total_credits,
+            tx_type="job_spent",
+            job_id=job.id,
+            node_id=job.node_id,
+            balance_after=consumer_balance.balance,
+        )
+    ]
+    if contributor_credits > 0:
+        transactions.append(
             CreditTransaction(
                 account_id=contributor_account_id,
                 amount=contributor_credits,
@@ -141,7 +145,7 @@ async def settle_job(
                 job_id=job.id,
                 node_id=job.node_id,
                 balance_after=contributor_balance.balance,
-            ),
-        ]
-    )
+            )
+        )
+    session.add_all(transactions)
     await session.flush()

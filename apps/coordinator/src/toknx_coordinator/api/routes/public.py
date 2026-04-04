@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from toknx_coordinator.api.deps import get_db_session, get_event_bus
 from toknx_coordinator.db.models import Account, CreditTransaction, Job, Node
+from toknx_coordinator.services.credit_units import format_subcredits
 from toknx_coordinator.services.events import EventBus
 from toknx_coordinator.services.model_registry import list_live_models
 
@@ -142,7 +143,8 @@ async def leaderboard(session: AsyncSession = Depends(get_db_session)):
         "leaders": [
             {
                 "github_username": row.github_username,
-                "credits_earned": int(row.credits_earned),
+                "credits_earned": format_subcredits(int(row.credits_earned)),
+                "credits_earned_subcredits": int(row.credits_earned),
             }
             for row in rows
         ]

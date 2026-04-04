@@ -128,7 +128,7 @@
 							<span>Contributor</span>
 						</div>
 						<div class="row-meta">
-							<span>{leader.credits_earned.toLocaleString()} credits</span>
+							<span class="tag accent-tag">{leader.credits_earned} credits</span>
 						</div>
 					</div>
 				{/each}
@@ -317,4 +317,3 @@
 		}
 	}
 </style>
-

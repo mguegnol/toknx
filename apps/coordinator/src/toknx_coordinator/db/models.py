@@ -37,7 +37,7 @@ class Node(Base):
     hardware_spec: Mapped[dict] = mapped_column(JSON, default=dict)
     status: Mapped[str] = mapped_column(String(32), default="starting", index=True)
     tunnel_connected: Mapped[bool] = mapped_column(Boolean, default=False)
-    stake_balance: Mapped[int] = mapped_column(Integer, default=0)
+    stake_balance: Mapped[int] = mapped_column(BigInteger, default=0)
     registered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     last_ping_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
@@ -65,9 +65,9 @@ class Job(Base):
     model: Mapped[str] = mapped_column(String(255), index=True)
     prompt_tokens: Mapped[int] = mapped_column(Integer, default=0)
     output_tokens: Mapped[int] = mapped_column(Integer, default=0)
-    credits_consumer: Mapped[int] = mapped_column(Integer, default=0)
-    credits_contributor: Mapped[int] = mapped_column(Integer, default=0)
-    credits_coordinator: Mapped[int] = mapped_column(Integer, default=0)
+    credits_consumer: Mapped[int] = mapped_column(BigInteger, default=0)
+    credits_contributor: Mapped[int] = mapped_column(BigInteger, default=0)
+    credits_coordinator: Mapped[int] = mapped_column(BigInteger, default=0)
     retries: Mapped[int] = mapped_column(Integer, default=0)
     request_payload: Mapped[dict] = mapped_column(JSON, default=dict)
     status: Mapped[str] = mapped_column(String(32), default="queued", index=True)
@@ -80,9 +80,9 @@ class CreditBalance(Base):
     __tablename__ = "credits"
 
     account_id: Mapped[str] = mapped_column(ForeignKey("accounts.id"), primary_key=True)
-    balance: Mapped[int] = mapped_column(Integer, default=0)
-    total_earned: Mapped[int] = mapped_column(Integer, default=0)
-    total_spent: Mapped[int] = mapped_column(Integer, default=0)
+    balance: Mapped[int] = mapped_column(BigInteger, default=0)
+    total_earned: Mapped[int] = mapped_column(BigInteger, default=0)
+    total_spent: Mapped[int] = mapped_column(BigInteger, default=0)
 
     account: Mapped[Account] = relationship(back_populates="credit_balance")
 
@@ -92,11 +92,11 @@ class CreditTransaction(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     account_id: Mapped[str] = mapped_column(ForeignKey("accounts.id"), index=True)
-    amount: Mapped[int] = mapped_column(Integer)
+    amount: Mapped[int] = mapped_column(BigInteger)
     tx_type: Mapped[str] = mapped_column(String(64), index=True)
     job_id: Mapped[str | None] = mapped_column(ForeignKey("jobs.id"), nullable=True)
     node_id: Mapped[str | None] = mapped_column(ForeignKey("nodes.id"), nullable=True)
-    balance_after: Mapped[int] = mapped_column(Integer)
+    balance_after: Mapped[int] = mapped_column(BigInteger)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
 
 
@@ -106,7 +106,7 @@ class Stake(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     node_id: Mapped[str | None] = mapped_column(ForeignKey("nodes.id"), nullable=True)
     account_id: Mapped[str] = mapped_column(ForeignKey("accounts.id"), index=True)
-    amount: Mapped[int] = mapped_column(Integer)
+    amount: Mapped[int] = mapped_column(BigInteger)
     status: Mapped[str] = mapped_column(String(32), default="active")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
