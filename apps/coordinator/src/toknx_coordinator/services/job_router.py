@@ -90,7 +90,9 @@ class TunnelManager:
             await queue.put(payload)
 
     async def dispatch(self, node_id: str, job: Job) -> None:
-        connection = self._connections[node_id]
+        connection = self._connections.get(node_id)
+        if connection is None:
+            raise RuntimeError(f"node {node_id} disconnected before dispatch")
         payload = {
             "type": "inference",
             "job_id": job.id,
@@ -105,16 +107,22 @@ class TunnelManager:
         await self.mark_seen(node_id)
         event_type = message.get("type")
         if event_type in {"token", "completed", "failed", "accepted"}:
-            await self.push_job_event(message["job_id"], message)
+            job_id = message.get("job_id")
+            if job_id:
+                await self.push_job_event(job_id, message)
 
     async def find_matching_node(self, session: AsyncSession, model_id: str) -> Node | None:
+        connected_node_ids = list(self._connections)
+        if not connected_node_ids:
+            return None
         nodes = (
             await session.execute(
-                select(Node).where(Node.status == "online").order_by(Node.last_ping_at.desc())
+                select(Node)
+                .where(Node.status == "online", Node.id.in_(connected_node_ids))
+                .order_by(Node.last_ping_at.desc())
             )
         ).scalars()
         for node in nodes:
-            if node.id in self._connections and model_id in node.committed_models:
+            if model_id in node.committed_models:
                 return node
         return None
-

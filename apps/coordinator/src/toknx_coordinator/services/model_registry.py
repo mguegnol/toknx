@@ -112,25 +112,12 @@ async def list_live_models(session: AsyncSession) -> list[dict]:
             select(ModelRegistry).order_by(ModelRegistry.estimated_ram_gb.asc(), ModelRegistry.hf_id.asc())
         )
     ).scalars()
-    node_rows = (
-        await session.execute(
-            select(ModelRegistry.hf_id, ModelRegistry.pricing_tier, ModelRegistry.credits_per_1k_tokens)
-        )
-    ).all()
-    pricing = {
-        row.hf_id: {
-            "pricing_tier": row.pricing_tier,
-            "credits_per_1k_tokens": row.credits_per_1k_tokens,
-        }
-        for row in node_rows
-    }
     return [
         {
             "hf_id": model.hf_id,
             "estimated_ram_gb": model.estimated_ram_gb,
-            "pricing_tier": pricing[model.hf_id]["pricing_tier"],
-            "credits_per_1k_tokens": pricing[model.hf_id]["credits_per_1k_tokens"],
+            "pricing_tier": model.pricing_tier,
+            "credits_per_1k_tokens": model.credits_per_1k_tokens,
         }
         for model in nodes
     ]
-

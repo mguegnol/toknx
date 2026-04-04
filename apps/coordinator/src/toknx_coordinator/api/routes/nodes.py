@@ -1,6 +1,7 @@
 import asyncio
 import json
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
 from pydantic import BaseModel, Field
@@ -17,6 +18,14 @@ from toknx_coordinator.services.security import decode_node_jwt, generate_token,
 
 router = APIRouter(prefix="/nodes", tags=["nodes"])
 settings = get_settings()
+
+
+def _derive_tunnel_base_url() -> str:
+    if settings.node_tunnel_public_base_url:
+        return str(settings.node_tunnel_public_base_url).rstrip("/")
+    parsed = urlparse(str(settings.public_base_url))
+    scheme = "wss" if parsed.scheme == "https" else "ws"
+    return f"{scheme}://{parsed.netloc}"
 
 
 class NodeRegisterRequest(BaseModel):
@@ -69,6 +78,7 @@ async def register_node(
     return {
         "node_id": node.id,
         "tunnel_token": tunnel_token,
+        "tunnel_url": f"{_derive_tunnel_base_url()}/nodes/tunnel?token={tunnel_token}",
         "node_secret": node_secret,
         "models": payload.committed_models,
     }

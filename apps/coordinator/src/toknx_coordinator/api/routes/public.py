@@ -1,5 +1,6 @@
 import asyncio
 import json
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends
@@ -19,15 +20,23 @@ nodes_online_gauge = Gauge("toknx_nodes_online", "Count of online ToknX nodes")
 jobs_running_gauge = Gauge("toknx_jobs_running", "Count of running ToknX jobs")
 tokens_total_gauge = Gauge("toknx_tokens_generated_total", "Total generated output tokens")
 tokens_per_second_gauge = Gauge("toknx_tokens_per_second", "Observed network output throughput")
+STATS_CACHE_TTL_SECONDS = 5.0
+_stats_cache_lock = asyncio.Lock()
 
 
-@router.get("/healthz")
-async def healthcheck():
-    return {"status": "ok"}
+@dataclass
+class StatsSnapshot:
+    nodes_online: int
+    jobs_running: int
+    tokens_total: int
+    tokens_per_second: float
+    expires_at: float
 
 
-@router.get("/stats")
-async def stats(session: AsyncSession = Depends(get_db_session)):
+_stats_cache: StatsSnapshot | None = None
+
+
+async def _compute_stats_snapshot(session: AsyncSession) -> StatsSnapshot:
     nodes_online = (
         await session.execute(select(func.count()).select_from(Node).where(Node.status == "online"))
     ).scalar_one()
@@ -50,21 +59,63 @@ async def stats(session: AsyncSession = Depends(get_db_session)):
             total_recent_tokens += job.output_tokens
             total_recent_seconds += max((job.completed_at - job.started_at).total_seconds(), 1.0)
     tokens_per_second = round(total_recent_tokens / total_recent_seconds, 2) if total_recent_seconds else 0.0
-    nodes_online_gauge.set(nodes_online)
-    jobs_running_gauge.set(jobs_running)
-    tokens_total_gauge.set(tokens_total)
-    tokens_per_second_gauge.set(tokens_per_second)
+    return StatsSnapshot(
+        nodes_online=nodes_online,
+        jobs_running=jobs_running,
+        tokens_total=tokens_total,
+        tokens_per_second=tokens_per_second,
+        expires_at=asyncio.get_running_loop().time() + STATS_CACHE_TTL_SECONDS,
+    )
+
+
+async def _get_stats_snapshot(session: AsyncSession) -> StatsSnapshot:
+    global _stats_cache
+
+    cached = _stats_cache
+    now = asyncio.get_running_loop().time()
+    if cached and cached.expires_at > now:
+        return cached
+
+    async with _stats_cache_lock:
+        cached = _stats_cache
+        now = asyncio.get_running_loop().time()
+        if cached and cached.expires_at > now:
+            return cached
+        _stats_cache = await _compute_stats_snapshot(session)
+        return _stats_cache
+
+
+def _publish_stats(snapshot: StatsSnapshot) -> None:
+    nodes_online_gauge.set(snapshot.nodes_online)
+    jobs_running_gauge.set(snapshot.jobs_running)
+    tokens_total_gauge.set(snapshot.tokens_total)
+    tokens_per_second_gauge.set(snapshot.tokens_per_second)
+
+
+@router.get("/healthz")
+async def healthcheck():
+    return {"status": "ok"}
+
+
+@router.get("/stats")
+async def stats(session: AsyncSession = Depends(get_db_session)):
+    global _stats_cache
+
+    snapshot = await _compute_stats_snapshot(session)
+    _stats_cache = snapshot
+    _publish_stats(snapshot)
     return {
-        "nodes_online": nodes_online,
-        "jobs_running": jobs_running,
-        "tokens_total": tokens_total,
-        "tokens_per_second": tokens_per_second,
+        "nodes_online": snapshot.nodes_online,
+        "jobs_running": snapshot.jobs_running,
+        "tokens_total": snapshot.tokens_total,
+        "tokens_per_second": snapshot.tokens_per_second,
     }
 
 
 @router.get("/metrics")
 async def metrics(session: AsyncSession = Depends(get_db_session)):
-    await stats(session)
+    snapshot = await _get_stats_snapshot(session)
+    _publish_stats(snapshot)
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 

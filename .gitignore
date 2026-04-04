@@ -4,6 +4,7 @@
 node_modules/
 dist/
 build/
+*.egg-info/
 .svelte-kit/
 __pycache__/
 .pytest_cache/

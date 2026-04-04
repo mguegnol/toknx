@@ -9,7 +9,6 @@ from contextlib import suppress
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import urlparse
 
 import httpx
 import websockets
@@ -38,28 +37,18 @@ def discover_hardware() -> dict:
     }
 
 
-def _ws_base_url(api_base_url: str) -> str:
-    parsed = urlparse(api_base_url)
-    scheme = "wss" if parsed.scheme == "https" else "ws"
-    return f"{scheme}://{parsed.netloc}"
-
-
-def _home_relative(path: Path) -> str:
-    return str(path.relative_to(Path.home()))
-
-
-def _find_exo_resources() -> Path | None:
+def _find_exo_resources() -> str | None:
     cached_checkouts = Path.home() / ".cache" / "uv" / "git-v0" / "checkouts"
     if not cached_checkouts.exists():
         return None
 
     for resource_dir in cached_checkouts.glob("*/*/resources"):
         if (resource_dir / "inference_model_cards").is_dir():
-            return resource_dir
+            return str(resource_dir.resolve())
     return None
 
 
-def _ensure_exo_dashboard_stub() -> Path:
+def _ensure_exo_dashboard_stub() -> str:
     dashboard_dir = Path.home() / ".toknx" / "exo-dashboard-stub"
     dashboard_dir.mkdir(parents=True, exist_ok=True)
     index_path = dashboard_dir / "index.html"
@@ -79,7 +68,7 @@ def _ensure_exo_dashboard_stub() -> Path:
 """,
             encoding="utf-8",
         )
-    return dashboard_dir
+    return str(dashboard_dir.resolve())
 
 
 def _build_exo_env() -> dict[str, str]:
@@ -88,10 +77,15 @@ def _build_exo_env() -> dict[str, str]:
     if "EXO_RESOURCES_DIR" not in env:
         resource_dir = _find_exo_resources()
         if resource_dir is not None:
-            env["EXO_RESOURCES_DIR"] = _home_relative(resource_dir)
+            env["EXO_RESOURCES_DIR"] = resource_dir
     if "EXO_DASHBOARD_DIR" not in env:
-        env["EXO_DASHBOARD_DIR"] = _home_relative(_ensure_exo_dashboard_stub())
+        env["EXO_DASHBOARD_DIR"] = _ensure_exo_dashboard_stub()
     return env
+
+
+async def _send_node_message(websocket, send_lock: asyncio.Lock, payload: dict) -> None:
+    async with send_lock:
+        await websocket.send(json.dumps(payload))
 
 
 async def _wait_for_exo_api(exo_port: int, exo_process: subprocess.Popen, timeout_seconds: float = 30.0) -> None:
@@ -154,15 +148,15 @@ async def _ensure_exo_instance(model_id: str, exo_port: int) -> None:
     raise RuntimeError(f"exo instance for model {model_id} did not become ready")
 
 
-async def _run_mock_job(websocket, job_id: str) -> None:
+async def _run_mock_job(send_message, job_id: str) -> None:
     text = "Mock ToknX response from contributor node."
     for index, token in enumerate(text.split(), start=1):
-        await websocket.send(json.dumps({"type": "token", "job_id": job_id, "chunk": f"{token} ", "output_tokens": index}))
+        await send_message({"type": "token", "job_id": job_id, "chunk": f"{token} ", "output_tokens": index})
         await asyncio.sleep(0.15)
-    await websocket.send(json.dumps({"type": "completed", "job_id": job_id, "output_tokens": len(text.split())}))
+    await send_message({"type": "completed", "job_id": job_id, "output_tokens": len(text.split())})
 
 
-async def _run_exo_job(websocket, *, job_id: str, request_payload: dict, exo_port: int) -> None:
+async def _run_exo_job(send_message, *, job_id: str, request_payload: dict, exo_port: int) -> None:
     async with httpx.AsyncClient(timeout=None) as client:
         try:
             async with client.stream(
@@ -177,30 +171,28 @@ async def _run_exo_job(websocket, *, job_id: str, request_payload: dict, exo_por
                         continue
                     payload = line[6:]
                     if payload == "[DONE]":
-                        await websocket.send(json.dumps({"type": "completed", "job_id": job_id, "output_tokens": output_tokens}))
+                        await send_message({"type": "completed", "job_id": job_id, "output_tokens": output_tokens})
                         return
                     event = json.loads(payload)
                     delta = event.get("choices", [{}])[0].get("delta", {}).get("content", "")
                     if delta:
                         output_tokens += 1
-                        await websocket.send(
-                            json.dumps(
-                                {
-                                    "type": "token",
-                                    "job_id": job_id,
-                                    "chunk": delta,
-                                    "output_tokens": output_tokens,
-                                }
-                            )
+                        await send_message(
+                            {
+                                "type": "token",
+                                "job_id": job_id,
+                                "chunk": delta,
+                                "output_tokens": output_tokens,
+                            }
                         )
         except httpx.HTTPStatusError as exc:
             detail = exc.response.text
             with suppress(Exception):
                 payload = exc.response.json()
                 detail = payload.get("detail") or payload.get("error") or detail
-            await websocket.send(json.dumps({"type": "failed", "job_id": job_id, "error": detail}))
+            await send_message({"type": "failed", "job_id": job_id, "error": detail})
         except Exception as exc:
-            await websocket.send(json.dumps({"type": "failed", "job_id": job_id, "error": str(exc)}))
+            await send_message({"type": "failed", "job_id": job_id, "error": str(exc)})
 
 
 async def run_node(config: StoredConfig, options: StartOptions) -> None:
@@ -246,34 +238,51 @@ async def run_node(config: StoredConfig, options: StartOptions) -> None:
         with suppress(NotImplementedError):
             loop.add_signal_handler(sig, _stop)
 
-    ws_url = f"{_ws_base_url(config.api_base_url)}/nodes/tunnel?token={registration['tunnel_token']}"
+    ws_url = registration["tunnel_url"]
     backoff = 1
 
     try:
         while not shutdown.is_set():
+            active_jobs: set[asyncio.Task] = set()
             try:
                 async with websockets.connect(ws_url, max_size=None) as websocket:
                     backoff = 1
+                    send_lock = asyncio.Lock()
+
+                    async def send_message(payload: dict) -> None:
+                        await _send_node_message(websocket, send_lock, payload)
+
+                    async def handle_inference(job_id: str, request_payload: dict) -> None:
+                        await send_message({"type": "accepted", "job_id": job_id})
+                        if options.mock_inference:
+                            await _run_mock_job(send_message, job_id)
+                        else:
+                            await _run_exo_job(
+                                send_message,
+                                job_id=job_id,
+                                request_payload=request_payload,
+                                exo_port=options.exo_port,
+                            )
+
                     while not shutdown.is_set():
                         raw_message = await websocket.recv()
                         message = json.loads(raw_message)
                         message_type = message.get("type")
                         if message_type == "ping":
-                            await websocket.send(json.dumps({"type": "pong", "node_id": registration["node_id"]}))
+                            await send_message({"type": "pong", "node_id": registration["node_id"]})
                         elif message_type == "inference":
-                            job_id = message["job_id"]
-                            request_payload = message["request"]
-                            await websocket.send(json.dumps({"type": "accepted", "job_id": job_id}))
-                            if options.mock_inference:
-                                await _run_mock_job(websocket, job_id)
-                            else:
-                                await _run_exo_job(
-                                    websocket,
-                                    job_id=job_id,
-                                    request_payload=request_payload,
-                                    exo_port=options.exo_port,
-                                )
+                            job_id = message.get("job_id")
+                            request_payload = message.get("request")
+                            if not job_id or request_payload is None:
+                                continue
+                            task = asyncio.create_task(handle_inference(job_id, request_payload))
+                            active_jobs.add(task)
+                            task.add_done_callback(active_jobs.discard)
             except Exception:
+                for task in list(active_jobs):
+                    task.cancel()
+                if active_jobs:
+                    await asyncio.gather(*active_jobs, return_exceptions=True)
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, 60)
     finally:
