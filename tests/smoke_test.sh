@@ -17,6 +17,10 @@ require_cmd curl
 require_cmd docker
 require_cmd python3
 
+compose() {
+  docker compose -f docker-compose.yml "$@"
+}
+
 json_get() {
   local payload="$1"
   local expr="$2"
@@ -68,7 +72,7 @@ cleanup() {
 trap cleanup EXIT
 
 echo "==> Starting temporary mock tunnel"
-docker compose exec -T coordinator python -c "import asyncio, json, websockets; token='${tunnel_token}'; node_id='${node_id}';
+compose exec -T coordinator python -c "import asyncio, json, websockets; token='${tunnel_token}'; node_id='${node_id}';
 async def main():
     async with websockets.connect(f'ws://localhost:8000/nodes/tunnel?token={token}', max_size=None) as ws:
         while True:
