@@ -124,7 +124,7 @@ Every account gets **20K credits** on signup. 20K credits at tier M = 10M tokens
 One GitHub OAuth → one ToknX account → one API key + one node token → one credit balance. Same account consumes and contributes.
 
 **Signup flow**:
-1. User visits `toknx.dev` → GitHub OAuth → account created
+1. User visits `toknx.co` → GitHub OAuth → account created
 2. Cloudflare Turnstile (invisible, free) blocks bots
 3. 20K free credits minted
 4. User receives API key (consuming) and node token (contributing)
@@ -202,7 +202,7 @@ One GitHub OAuth → one ToknX account → one API key + one node token → one 
   - Start mlx-lm as subprocess
   - Status `starting` until all models loaded → `online`
 - [ ] `POST /nodes/register` with committed models, hardware specs (RAM, chip), capability mode → JWT
-- [ ] Open persistent WS to `wss://coordinator.toknx.dev/nodes/tunnel`
+- [ ] Open persistent WS to `wss://api.toknx.co/nodes/tunnel`
 - [ ] Handle `inference` jobs: forward to `localhost:52415/v1/chat/completions`, stream SSE chunks back via WS
 - [ ] Send completion message with `output_tokens` count
 - [ ] Auto-reconnect: exponential backoff (1s → 2s → 4s → max 60s)
@@ -219,7 +219,7 @@ One GitHub OAuth → one ToknX account → one API key + one node token → one 
 - [ ] SSE connection to `/events/stream` for live activity feed
 - [ ] Poll `/stats`, `/v1/models`, `/leaderboard` for dashboard widgets
 - [ ] GitHub signup CTA + "contribute a node" link to docs
-- [ ] Dockerize dashboard, add Traefik labels for `toknx.dev` catch-all route
+- [ ] Dockerize dashboard, add Traefik labels for `toknx.co` catch-all route
 - [ ] Run own nodes for 24h before sharing — verify dashboard looks alive with real traffic
 - [ ] Docs page: "How to connect Continue.dev / Aider / Cursor to ToknX" + "How to contribute a node"
 - [ ] HN post: "I built a compute co-op for Apple Silicon — contribute idle Mac compute, earn LLM tokens"
@@ -228,7 +228,7 @@ One GitHub OAuth → one ToknX account → one API key + one node token → one 
 
 ## Public dashboard
 
-Single-page app at `toknx.dev`. The page people land on from HN and Twitter. Must make the network feel alive and the project feel real.
+Single-page app at `toknx.co`. The page people land on from HN and Twitter. Must make the network feel alive and the project feel real.
 
 ### Layout
 

@@ -111,11 +111,12 @@ What ToknX does on startup:
 
 1. detects your hardware
 2. registers the node with the coordinator
-3. resolves each model to a local cached snapshot and downloads it only if it is not already present
-4. starts local `mlx-lm` model servers
-5. locks the node stake from your account balance
-6. opens a persistent WebSocket tunnel back to the coordinator
-7. serves inference requests until you stop the process
+3. starts local `mlx-lm` model servers, which reuse the Hugging Face cache if the model is already present
+4. locks the node stake from your account balance
+5. opens a persistent WebSocket tunnel back to the coordinator
+6. serves inference requests until you stop the process
+
+`toknx start` detaches and keeps the node running in the background. The CLI prints the local log path when it launches the daemon.
 
 ### 4. Check that the node is online
 
@@ -129,13 +130,13 @@ You should see your account, credits, and local runtime state once the node is c
 
 ### 5. Stop the node cleanly
 
-Press `Ctrl+C` in the running process, or use:
+Use:
 
 ```bash
 toknx stop
 ```
 
-Stopping cleanly deregisters the node and clears the local runtime state.
+Stopping cleanly terminates the background process, deregisters the node, and clears the local runtime state.
 
 ### Useful commands
 
@@ -152,6 +153,8 @@ toknx stop
 - Registering a node locks stake from the same account balance used for API consumption.
 
 ## Part 2: Run the Whole Project Locally
+
+If you want to deploy ToknX to a VPS, use the production Compose override and guide in [docs/vps-deployment.md](/Users/maxence/Documents/toknx/docs/vps-deployment.md).
 
 This section is for maintainers working on ToknX itself.
 

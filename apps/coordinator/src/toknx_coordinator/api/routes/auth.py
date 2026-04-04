@@ -1,3 +1,7 @@
+import base64
+import hashlib
+import hmac
+import json
 import secrets
 from urllib.parse import urlencode
 
@@ -15,6 +19,42 @@ from toknx_coordinator.services.security import derive_stable_token, generate_to
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 settings = get_settings()
+
+
+def _encode_oauth_state(*, state: str | None, redirect_uri: str | None) -> str:
+    payload = {"state": state or "", "redirect_uri": redirect_uri or ""}
+    payload_json = json.dumps(payload, separators=(",", ":"), sort_keys=True)
+    payload_b64 = base64.urlsafe_b64encode(payload_json.encode("utf-8")).decode("ascii")
+    signature = hmac.new(
+        settings.jwt_secret.encode("utf-8"),
+        payload_b64.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    return f"{payload_b64}.{signature}"
+
+
+def _decode_oauth_state(raw_state: str | None) -> tuple[str | None, str | None]:
+    if not raw_state or "." not in raw_state:
+        return raw_state, None
+
+    payload_b64, signature = raw_state.rsplit(".", 1)
+    expected_signature = hmac.new(
+        settings.jwt_secret.encode("utf-8"),
+        payload_b64.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    if not hmac.compare_digest(signature, expected_signature):
+        return raw_state, None
+
+    try:
+        payload_json = base64.urlsafe_b64decode(payload_b64.encode("ascii")).decode("utf-8")
+        payload = json.loads(payload_json)
+    except Exception:
+        return raw_state, None
+
+    state = payload.get("state") or None
+    redirect_uri = payload.get("redirect_uri") or None
+    return state, redirect_uri
 
 
 @router.get("/github")
@@ -36,7 +76,10 @@ async def github_auth(
     if not settings.github_client_id:
         raise HTTPException(status_code=500, detail="github oauth is not configured")
 
-    github_state = state or secrets.token_urlsafe(24)
+    github_state = _encode_oauth_state(
+        state=state or secrets.token_urlsafe(24),
+        redirect_uri=redirect_uri,
+    )
     params = {
         "client_id": settings.github_client_id,
         "redirect_uri": str(settings.github_redirect_url),
@@ -53,6 +96,9 @@ async def github_callback(
     redirect_uri: str | None = None,
     session: AsyncSession = Depends(get_db_session),
 ):
+    state, encoded_redirect_uri = _decode_oauth_state(state)
+    redirect_uri = redirect_uri or encoded_redirect_uri
+
     if code.startswith("dev:"):
         github_username = code.split(":", maxsplit=1)[1]
         github_id = f"dev-{github_username}"
