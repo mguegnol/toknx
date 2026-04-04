@@ -14,11 +14,12 @@ Production URLs:
 
 ## How It Works
 
-1. Log in with GitHub.
-2. toknX gives you an API key and a node token.
-3. Start a node from your Mac with one or more models.
-4. toknX routes inference jobs to online nodes.
-5. Credits move from the consumer to the node operator.
+1. Install the CLI
+2. Log in with GitHub
+3. toknX gives you an API key and a node token
+4. Start a node from your Mac with one or more models
+5. toknX routes inference jobs to online nodes
+6. Credits move from the consumer to the node operator
 
 ## Requirements
 
@@ -32,7 +33,7 @@ Install the Metal Toolchain if needed:
 xcodebuild -downloadComponent MetalToolchain
 ```
 
-## Install The CLI
+## Install the CLI
 
 Recommended:
 
@@ -195,6 +196,7 @@ TOKNX_API_BASE_URL=http://localhost/api toknx start --model mlx-community/Llama-
 
 Planned next features:
 
+- add support for llama.cpp and GGUF models
 - WAN model sharding for models that do not fit on a single node
 - verification and stake slashing for untrusted or faulty nodes
 - dynamic model load and unload on nodes, without full restart
