@@ -22,8 +22,12 @@ export type Leader = {
 export type EventRow = {
 	type: string;
 	created_at: string;
+	job_id?: string;
 	node_id?: string;
+	model?: string;
 	models?: string[];
+	output_tokens?: number;
+	error?: string;
 	hardware?: {
 		chip?: string;
 		ram_gb?: number;

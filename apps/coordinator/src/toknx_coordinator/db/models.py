@@ -112,6 +112,5 @@ class Stake(Base):
 
 
 Index("idx_nodes_committed_models", Node.committed_models, postgresql_using="gin")
-Index("idx_nodes_online_only", Node.status)
 Index("idx_jobs_active_status", Job.status, Job.created_at)
 Index("idx_credit_tx_account_created", CreditTransaction.account_id, CreditTransaction.created_at)

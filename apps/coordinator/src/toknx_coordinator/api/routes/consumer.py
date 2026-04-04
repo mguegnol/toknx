@@ -8,9 +8,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from toknx_coordinator.api.deps import get_api_account, get_db_session, get_tunnel_manager
+from toknx_coordinator.api.deps import get_api_account, get_db_session, get_event_bus, get_tunnel_manager
 from toknx_coordinator.core.config import get_settings
-from toknx_coordinator.db.models import Account, CreditBalance, Job, Node
+from toknx_coordinator.db.models import Account, Job, Node
 from toknx_coordinator.services.credit_units import credits_to_subcredits
 from toknx_coordinator.services.credits import ensure_credit_balance, settle_job
 from toknx_coordinator.services.events import EventBus
@@ -65,6 +65,7 @@ async def create_chat_completion(
     account: Account = Depends(get_api_account),
     session: AsyncSession = Depends(get_db_session),
     tunnel_manager: TunnelManager = Depends(get_tunnel_manager),
+    event_bus: EventBus = Depends(get_event_bus),
 ):
     inflight = await _active_jobs_for_account(session, account.id)
     if inflight >= settings.account_inflight_limit:
@@ -115,6 +116,14 @@ async def create_chat_completion(
         job.completed_at = datetime.now(timezone.utc)
         await session.commit()
         raise HTTPException(status_code=503, detail="selected node became unavailable") from exc
+    await event_bus.publish(
+        "job_started",
+        {
+            "job_id": job.id,
+            "node_id": node.id,
+            "model": payload.model,
+        },
+    )
 
     async def _finalize(output_tokens: int, prompt_tokens: int = 0) -> None:
         refreshed_job = await session.get(Job, job.id)
@@ -128,14 +137,37 @@ async def create_chat_completion(
         contributor_account = await session.get(Account, refreshed_node.account_id)
         if contributor_account:
             await ensure_credit_balance(session, contributor_account)
-            await settle_job(
-                session,
-                job=refreshed_job,
-                credits_per_1k=model.credits_per_1k_tokens,
-                contributor_account_id=contributor_account.id,
-            )
+            try:
+                await settle_job(
+                    session,
+                    job=refreshed_job,
+                    credits_per_1k=model.credits_per_1k_tokens,
+                    contributor_account_id=contributor_account.id,
+                )
+            except ValueError:
+                refreshed_job.status = "failed"
+                await session.commit()
+                await event_bus.publish(
+                    "job_failed",
+                    {
+                        "job_id": refreshed_job.id,
+                        "node_id": refreshed_node.id,
+                        "model": refreshed_job.model,
+                        "error": "insufficient credits to settle job",
+                    },
+                )
+                return
         refreshed_job.status = "completed"
         await session.commit()
+        await event_bus.publish(
+            "job_completed",
+            {
+                "job_id": refreshed_job.id,
+                "node_id": refreshed_node.id,
+                "model": refreshed_job.model,
+                "output_tokens": output_tokens,
+            },
+        )
 
     async def stream_response():
         output_tokens = 0
@@ -162,6 +194,15 @@ async def create_chat_completion(
                             refreshed_job.status = "failed"
                             refreshed_job.completed_at = datetime.now(timezone.utc)
                             await session.commit()
+                            await event_bus.publish(
+                                "job_failed",
+                                {
+                                    "job_id": refreshed_job.id,
+                                    "node_id": node.id,
+                                    "model": refreshed_job.model,
+                                    "error": message.get("error", "job failed"),
+                                },
+                            )
                         yield f"data: {json.dumps({'error': message.get('error', 'job failed')})}\n\n"
                         break
             except TimeoutError:
@@ -170,6 +211,15 @@ async def create_chat_completion(
                     refreshed_job.status = "failed"
                     refreshed_job.completed_at = datetime.now(timezone.utc)
                     await session.commit()
+                    await event_bus.publish(
+                        "job_failed",
+                        {
+                            "job_id": refreshed_job.id,
+                            "node_id": node.id,
+                            "model": refreshed_job.model,
+                            "error": "job timed out waiting for node output",
+                        },
+                    )
                 yield f"data: {json.dumps({'error': 'job timed out waiting for node output'})}\n\n"
         finally:
             tunnel_manager.close_job_stream(job.id)
@@ -197,11 +247,29 @@ async def create_chat_completion(
                     job.status = "failed"
                     job.completed_at = datetime.now(timezone.utc)
                     await session.commit()
+                    await event_bus.publish(
+                        "job_failed",
+                        {
+                            "job_id": job.id,
+                            "node_id": node.id,
+                            "model": job.model,
+                            "error": message.get("error", "job failed"),
+                        },
+                    )
                     raise HTTPException(status_code=502, detail=message.get("error", "job failed"))
         except TimeoutError as exc:
             job.status = "failed"
             job.completed_at = datetime.now(timezone.utc)
             await session.commit()
+            await event_bus.publish(
+                "job_failed",
+                {
+                    "job_id": job.id,
+                    "node_id": node.id,
+                    "model": job.model,
+                    "error": "job timed out waiting for node output",
+                },
+            )
             raise HTTPException(status_code=504, detail="job timed out waiting for node output") from exc
     finally:
         tunnel_manager.close_job_stream(job.id)

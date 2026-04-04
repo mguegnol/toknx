@@ -93,11 +93,9 @@ async def github_auth(
 async def github_callback(
     code: str,
     state: str | None = None,
-    redirect_uri: str | None = None,
     session: AsyncSession = Depends(get_db_session),
 ):
-    state, encoded_redirect_uri = _decode_oauth_state(state)
-    redirect_uri = redirect_uri or encoded_redirect_uri
+    state, redirect_uri = _decode_oauth_state(state)
 
     if code.startswith("dev:"):
         github_username = code.split(":", maxsplit=1)[1]

@@ -5,6 +5,7 @@ from sqlalchemy import select
 
 from toknx_coordinator.api.routes import consumer as consumer_routes
 from toknx_coordinator.db.models import Job, Node
+from toknx_coordinator.services.events import EventBus
 from toknx_coordinator.services.job_router import TunnelManager
 
 
@@ -78,6 +79,7 @@ async def test_create_chat_completion_excludes_none_fields_from_forwarded_reques
         account=account,
         session=db_session,
         tunnel_manager=TunnelManager(None, None),
+        event_bus=EventBus(),
     )
 
     job = await _queued_job(original_execute)
@@ -168,15 +170,19 @@ async def test_create_chat_completion_returns_prompt_tokens_in_usage(
         lambda *args, **kwargs: _counting_execute(original_execute, *args, **kwargs),
     )
 
+    event_bus = EventBus()
+    stream = event_bus.subscribe()
     tunnel_manager = FakeTunnelManager()
     response = await consumer_routes.create_chat_completion(
         payload=payload,
         account=consumer,
         session=db_session,
         tunnel_manager=tunnel_manager,
+        event_bus=event_bus,
     )
 
     job = await _queued_job(original_execute)
+    events = [stream.get_nowait(), stream.get_nowait()]
 
     assert tunnel_manager.dispatched_request == {
         "model": "mlx-community/Llama-3.2-1B-Instruct-4bit",
@@ -191,3 +197,15 @@ async def test_create_chat_completion_returns_prompt_tokens_in_usage(
     assert job.prompt_tokens == 7
     assert job.output_tokens == 1
     assert job.status == "completed"
+    assert [event.event for event in events] == ["job_started", "job_completed"]
+    assert events[0].payload == {
+        "job_id": job.id,
+        "node_id": "node-123",
+        "model": "mlx-community/Llama-3.2-1B-Instruct-4bit",
+    }
+    assert events[1].payload == {
+        "job_id": job.id,
+        "node_id": "node-123",
+        "model": "mlx-community/Llama-3.2-1B-Instruct-4bit",
+        "output_tokens": 1,
+    }

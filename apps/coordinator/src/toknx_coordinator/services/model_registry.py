@@ -1,7 +1,7 @@
 import re
 
-import httpx
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from toknx_coordinator.db.models import ModelRegistry
@@ -58,23 +58,6 @@ def pricing_tier_for_ram(ram_gb: float) -> str:
     return "XXL"
 
 
-async def fetch_hf_metadata(model_id: str) -> dict:
-    url = f"https://huggingface.co/api/models/{model_id}"
-    async with httpx.AsyncClient(timeout=5.0) as client:
-        response = await client.get(url)
-        response.raise_for_status()
-        data = response.json()
-    return {
-        "parameter_count": infer_parameter_count(model_id),
-        "quantization": infer_quantization(model_id),
-        "estimated_ram_gb": estimate_ram_gb(
-            infer_parameter_count(model_id),
-            infer_quantization(model_id),
-        ),
-        "metadata": data,
-    }
-
-
 async def resolve_or_create_model(session: AsyncSession, hf_id: str) -> ModelRegistry:
     existing = await session.get(ModelRegistry, hf_id)
     if existing:
@@ -83,15 +66,6 @@ async def resolve_or_create_model(session: AsyncSession, hf_id: str) -> ModelReg
     parameter_count = infer_parameter_count(hf_id)
     quantization = infer_quantization(hf_id)
     estimated_ram_gb = estimate_ram_gb(parameter_count, quantization)
-
-    try:
-        remote = await fetch_hf_metadata(hf_id)
-        parameter_count = remote["parameter_count"]
-        quantization = remote["quantization"]
-        estimated_ram_gb = remote["estimated_ram_gb"]
-    except Exception:
-        pass
-
     tier = pricing_tier_for_ram(estimated_ram_gb)
     record = ModelRegistry(
         hf_id=hf_id,
@@ -102,7 +76,14 @@ async def resolve_or_create_model(session: AsyncSession, hf_id: str) -> ModelReg
         credits_per_1k_tokens=TIER_PRICING[tier],
     )
     session.add(record)
-    await session.flush()
+    try:
+        await session.flush()
+    except IntegrityError:
+        await session.rollback()
+        existing = await session.get(ModelRegistry, hf_id)
+        if existing:
+            return existing
+        raise
     return record
 
 

@@ -14,7 +14,6 @@ class Settings(BaseSettings):
 
     app_name: str = "toknX Coordinator"
     database_url: str = "sqlite+aiosqlite:///./toknx.db"
-    redis_url: str = "redis://localhost:6379/0"
     public_base_url: AnyHttpUrl = "http://localhost:8000"
     node_tunnel_public_base_url: AnyUrl | None = None
     dashboard_origin: AnyHttpUrl = "http://localhost:5173"
@@ -22,7 +21,6 @@ class Settings(BaseSettings):
     github_client_id: str = ""
     github_client_secret: str = ""
     github_redirect_url: AnyHttpUrl = "http://localhost:8000/auth/github/callback"
-    turnstile_secret_key: str = ""
     jwt_secret: str = Field(default="change-me", min_length=8)
     auth_dev_bypass: bool = False
 

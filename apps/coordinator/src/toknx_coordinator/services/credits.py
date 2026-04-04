@@ -83,7 +83,7 @@ async def lock_stake(session: AsyncSession, account: Account, *, node_id: str | 
 async def refund_stake(session: AsyncSession, stake: Stake) -> None:
     if stake.status != "active":
         return
-    balance = await session.get(CreditBalance, stake.account_id)
+    balance = await _get_credit_balance_for_update(session, stake.account_id)
     if balance is None:
         return
     balance.balance += stake.amount

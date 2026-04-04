@@ -48,17 +48,27 @@ async def _compute_stats_snapshot(session: AsyncSession) -> StatsSnapshot:
         await session.execute(select(func.coalesce(func.sum(Job.output_tokens), 0)).select_from(Job))
     ).scalar_one()
     window = datetime.now(timezone.utc) - timedelta(minutes=5)
-    recent_jobs = (
+    throughput_row = (
         await session.execute(
-            select(Job).where(Job.completed_at.is_not(None), Job.completed_at >= window)
+            select(
+                func.coalesce(func.sum(Job.output_tokens), 0).label("tokens"),
+                func.coalesce(
+                    func.sum(
+                        func.extract("epoch", Job.completed_at) - func.extract("epoch", Job.started_at)
+                    ),
+                    0,
+                ).label("seconds"),
+            )
+            .select_from(Job)
+            .where(
+                Job.completed_at.is_not(None),
+                Job.started_at.is_not(None),
+                Job.completed_at >= window,
+            )
         )
-    ).scalars()
-    total_recent_tokens = 0
-    total_recent_seconds = 0.0
-    for job in recent_jobs:
-        if job.started_at and job.completed_at:
-            total_recent_tokens += job.output_tokens
-            total_recent_seconds += max((job.completed_at - job.started_at).total_seconds(), 1.0)
+    ).one()
+    total_recent_tokens = int(throughput_row.tokens)
+    total_recent_seconds = max(float(throughput_row.seconds), 0.0)
     tokens_per_second = round(total_recent_tokens / total_recent_seconds, 2) if total_recent_seconds else 0.0
     return StatsSnapshot(
         nodes_online=nodes_online,
@@ -100,10 +110,7 @@ async def healthcheck():
 
 @router.get("/stats")
 async def stats(session: AsyncSession = Depends(get_db_session)):
-    global _stats_cache
-
-    snapshot = await _compute_stats_snapshot(session)
-    _stats_cache = snapshot
+    snapshot = await _get_stats_snapshot(session)
     _publish_stats(snapshot)
     return {
         "nodes_online": snapshot.nodes_online,
@@ -158,7 +165,11 @@ async def event_stream(event_bus: EventBus = Depends(get_event_bus)):
     async def generate():
         try:
             while True:
-                message = await queue.get()
+                try:
+                    message = await asyncio.wait_for(queue.get(), timeout=15.0)
+                except TimeoutError:
+                    yield ": ping\n\n"
+                    continue
                 payload = {
                     "type": message.event,
                     "created_at": message.created_at,

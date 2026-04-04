@@ -18,8 +18,8 @@ class CallbackHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b"toknX login complete. You can close this window.")
 
-def log_message(self, format: str, *args) -> None:  # noqa: A003
-    return
+    def log_message(self, format: str, *args) -> None:  # noqa: A003
+        return
 
 
 def login_via_browser(api_base_url: str, *, state: str) -> dict:

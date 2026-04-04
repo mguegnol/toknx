@@ -14,6 +14,7 @@ from toknx_coordinator.services.events import EventBus
 from toknx_coordinator.services.job_router import TunnelManager
 
 settings = get_settings()
+dashboard_origin = str(settings.dashboard_origin).rstrip("/")
 
 
 @asynccontextmanager
@@ -28,7 +29,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[str(settings.dashboard_origin)],
+    allow_origins=[dashboard_origin],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

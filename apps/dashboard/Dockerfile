@@ -1,4 +1,4 @@
-FROM node:22-alpine AS build
+FROM node:24-alpine AS build
 
 WORKDIR /app
 COPY apps/dashboard/package.json /app/package.json
@@ -10,7 +10,7 @@ COPY install-node.sh /app/static/install-node.sh
 
 RUN npm install && npm run build
 
-FROM node:22-alpine
+FROM node:24-alpine
 
 WORKDIR /app
 COPY --from=build /app/package.json /app/package.json
@@ -21,4 +21,3 @@ ENV HOST=0.0.0.0
 ENV PORT=3000
 
 CMD ["node", "build"]
-
