@@ -78,7 +78,7 @@ async def main():
             elif message.get('type') == 'inference':
                 job_id = message['job_id']
                 await ws.send(json.dumps({'type': 'accepted', 'job_id': job_id}))
-                chunks = ['ToknX ', 'smoke ', 'test.']
+                chunks = ['toknX ', 'smoke ', 'test.']
                 for index, chunk in enumerate(chunks, start=1):
                     await ws.send(json.dumps({'type': 'token', 'job_id': job_id, 'chunk': chunk, 'output_tokens': index}))
                     await asyncio.sleep(0.05)
@@ -94,11 +94,11 @@ echo "==> Sending completion request"
 completion_payload="$(curl -fsS "${BASE_URL}/v1/chat/completions" \
   -H "Authorization: Bearer ${api_key}" \
   -H "Content-Type: application/json" \
-  --data "{\"model\":\"${MODEL_ID}\",\"stream\":false,\"messages\":[{\"role\":\"user\",\"content\":\"Say hello from ToknX smoke test.\"}]}")"
+  --data "{\"model\":\"${MODEL_ID}\",\"stream\":false,\"messages\":[{\"role\":\"user\",\"content\":\"Say hello from toknX smoke test.\"}]}")"
 assistant_text="$(json_get "$completion_payload" "choices.0.message.content")"
 echo "$completion_payload"
 
-if [[ "$assistant_text" != "ToknX smoke test." ]]; then
+if [[ "$assistant_text" != "toknX smoke test." ]]; then
   echo "unexpected assistant response: ${assistant_text}" >&2
   exit 1
 fi

@@ -1,7 +1,7 @@
 [project]
 name = "toknx-node"
 version = "0.1.0"
-description = "ToknX node CLI"
+description = "toknX node CLI"
 requires-python = ">=3.9"
 dependencies = [
   "typer==0.15.2",

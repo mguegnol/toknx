@@ -12,7 +12,7 @@ from pathlib import Path
 import typer
 
 from toknx_node.auth_flow import login_via_browser
-from toknx_node.client import ToknXClient
+from toknx_node.client import toknXClient
 from toknx_node.config import (
     CONFIG_DIR,
     DaemonState,
@@ -58,7 +58,7 @@ def _clear_registered_runtime(config: StoredConfig) -> None:
         clear_runtime()
         return
 
-    client = ToknXClient(get_api_base_url(), config.api_key, config.node_token)
+    client = toknXClient(get_api_base_url(), config.api_key, config.node_token)
     with suppress(Exception):
         client.deregister_node(runtime.node_id)
     clear_runtime()
@@ -143,7 +143,7 @@ def start(
         raise typer.BadParameter("run `toknx login` first")
     daemon = _load_live_daemon(config)
     if daemon.pid:
-        typer.echo(f"ToknX node already running in background (pid {daemon.pid}).")
+        typer.echo(f"toknX node already running in background (pid {daemon.pid}).")
         raise typer.Exit(code=1)
 
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
@@ -170,13 +170,13 @@ def start(
     time.sleep(1.0)
     if process.poll() is not None:
         clear_daemon()
-        typer.echo(f"ToknX node failed to start. See log: {DAEMON_LOG_PATH}", err=True)
+        typer.echo(f"toknX node failed to start. See log: {DAEMON_LOG_PATH}", err=True)
         log_tail = _tail_log(DAEMON_LOG_PATH)
         if log_tail:
             typer.echo(log_tail, err=True)
         raise typer.Exit(code=1)
 
-    typer.echo(f"ToknX node started in background (pid {process.pid}).")
+    typer.echo(f"toknX node started in background (pid {process.pid}).")
     typer.echo(f"Logs: {DAEMON_LOG_PATH}")
 
 
@@ -217,7 +217,7 @@ def status() -> None:
     daemon = _load_live_daemon()
     typer.echo(f"Account: @{config.github_username or 'not logged in'}")
     if config.api_key and config.node_token:
-        client = ToknXClient(api_base_url, config.api_key, config.node_token)
+        client = toknXClient(api_base_url, config.api_key, config.node_token)
         try:
             balance = client.get_balance()
             typer.echo(f"Credits: {balance['balance']}")
@@ -252,7 +252,7 @@ def stop() -> None:
 
     runtime = load_runtime()
     if runtime.node_id and config.node_token:
-        client = ToknXClient(api_base_url, config.api_key, config.node_token)
+        client = toknXClient(api_base_url, config.api_key, config.node_token)
         try:
             client.deregister_node(runtime.node_id)
             typer.echo(f"Deregistered node {runtime.node_id}")

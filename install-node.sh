@@ -82,7 +82,7 @@ download_source_dir() {
   extracted_dir="${tmp_root}/src"
   mkdir -p "$extracted_dir"
 
-  log "Downloading ToknX source archive"
+  log "Downloading toknX source archive"
   curl -fsSL "$TOKNX_INSTALL_ARCHIVE_URL" -o "$archive_path"
   tar -xzf "$archive_path" -C "$extracted_dir"
 
@@ -95,7 +95,7 @@ main() {
   require_cmd uv
 
   if [[ "$(uname -s)" != "Darwin" ]]; then
-    log "Non-macOS host detected. ToknX nodes are intended for Apple Silicon Macs."
+    log "Non-macOS host detected. toknX nodes are intended for Apple Silicon Macs."
   fi
 
   local source_dir tool_bin_dir local_source_dir=0
@@ -111,7 +111,7 @@ main() {
   log "Installing Python ${TOKNX_PYTHON_VERSION} with uv"
   uv python install "$TOKNX_PYTHON_VERSION" >/dev/null
 
-  log "Installing ToknX CLI"
+  log "Installing toknX CLI"
   if [[ "$local_source_dir" == "1" ]]; then
     uv tool install \
       --python "$TOKNX_PYTHON_VERSION" \
@@ -135,7 +135,7 @@ main() {
 
   tool_bin_dir="$(uv tool dir --bin)"
 
-  log "ToknX CLI installed"
+  log "toknX CLI installed"
   printf 'tool bin dir: %s\n' "$tool_bin_dir"
 
   if ! command -v toknx >/dev/null 2>&1 || ! command -v mlx_lm.server >/dev/null 2>&1; then

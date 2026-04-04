@@ -1,6 +1,7 @@
 import pytest
 from sqlalchemy import select
 
+from toknx_coordinator.core.config import get_settings
 from toknx_coordinator.db.models import CreditBalance, CreditTransaction, Job
 from toknx_coordinator.services.credit_units import credits_to_subcredits, format_subcredits
 from toknx_coordinator.services.credits import ensure_credit_balance, settle_job
@@ -55,9 +56,10 @@ async def test_settle_job_small_request_still_pays_coordinator_fee(
             .order_by(CreditTransaction.id.asc())
         )
     ).scalars().all()
+    signup_bonus = get_settings().coordinator_signup_bonus
 
-    assert consumer_balance.balance == credits_to_subcredits(20_000) - 900
-    assert contributor_balance.balance == credits_to_subcredits(20_000) + 810
+    assert consumer_balance.balance == credits_to_subcredits(signup_bonus) - 900
+    assert contributor_balance.balance == credits_to_subcredits(signup_bonus) + 810
     assert job.credits_consumer == 900
     assert job.credits_coordinator == 90
     assert job.credits_contributor == 810
@@ -98,10 +100,11 @@ async def test_settle_job_same_account_keeps_fee_with_no_self_refund(
             .order_by(CreditTransaction.id.asc())
         )
     ).scalars().all()
+    signup_bonus = get_settings().coordinator_signup_bonus
 
-    assert balance.balance == credits_to_subcredits(20_000) - 90
+    assert balance.balance == credits_to_subcredits(signup_bonus) - 90
     assert balance.total_spent == 900
-    assert balance.total_earned == credits_to_subcredits(20_000) + 810
+    assert balance.total_earned == credits_to_subcredits(signup_bonus) + 810
     assert job.credits_consumer == 900
     assert job.credits_coordinator == 90
     assert job.credits_contributor == 810

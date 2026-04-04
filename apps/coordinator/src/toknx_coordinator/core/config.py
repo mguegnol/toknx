@@ -12,7 +12,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    app_name: str = "ToknX Coordinator"
+    app_name: str = "toknX Coordinator"
     database_url: str = "sqlite+aiosqlite:///./toknx.db"
     redis_url: str = "redis://localhost:6379/0"
     public_base_url: AnyHttpUrl = "http://localhost:8000"
@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     jwt_secret: str = Field(default="change-me", min_length=8)
     auth_dev_bypass: bool = False
 
-    coordinator_signup_bonus: int = 20_000
+    coordinator_signup_bonus: int = 1_000
     node_stake_credits: int = 500
     queue_timeout_seconds: int = 30
     model_queue_cap: int = 100

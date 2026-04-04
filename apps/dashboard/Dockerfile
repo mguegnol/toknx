@@ -1,8 +1,12 @@
 FROM node:22-alpine AS build
 
 WORKDIR /app
-COPY package.json svelte.config.js tsconfig.json vite.config.ts /app/
-COPY src /app/src
+COPY apps/dashboard/package.json /app/package.json
+COPY apps/dashboard/svelte.config.js /app/svelte.config.js
+COPY apps/dashboard/tsconfig.json /app/tsconfig.json
+COPY apps/dashboard/vite.config.ts /app/vite.config.ts
+COPY apps/dashboard/src /app/src
+COPY install-node.sh /app/static/install-node.sh
 
 RUN npm install && npm run build
 

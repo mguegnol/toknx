@@ -203,7 +203,7 @@ def test_status_reports_running_background_process(monkeypatch):
         "_load_live_daemon",
         lambda _config=None: DaemonState(pid=321, log_path="/tmp/node.log"),
     )
-    monkeypatch.setattr(cli, "ToknXClient", FakeClient)
+    monkeypatch.setattr(cli, "toknXClient", FakeClient)
 
     result = runner.invoke(cli.app, ["status"])
 
@@ -237,7 +237,7 @@ def test_stop_terminates_background_daemon_and_deregisters(monkeypatch):
         "load_runtime",
         lambda: RuntimeState(node_id="node-123", models=["mlx-community/Llama-3.2-1B-Instruct-4bit"]),
     )
-    monkeypatch.setattr(cli, "ToknXClient", FakeClient)
+    monkeypatch.setattr(cli, "toknXClient", FakeClient)
     monkeypatch.setattr(cli, "clear_daemon", lambda: captured["cleared"].append("daemon"))
     monkeypatch.setattr(cli, "clear_runtime", lambda: captured["cleared"].append("runtime"))
 

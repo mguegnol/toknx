@@ -1,8 +1,8 @@
-# ToknX v1 — Implementation Plan
+# toknX v1 — Implementation Plan
 
 A compute co-op for LLM inference. Contribute idle Apple Silicon hardware, earn credits, spend credits on code generation. Solo inference only — no sharding, no verification, no dashboard. Prove the marketplace works first.
 
-Full architecture plan: [ToknX.md](ToknX.md)
+Full architecture plan: [toknX.md](toknX.md)
 
 ---
 
@@ -121,7 +121,7 @@ Every account gets **20K credits** on signup. 20K credits at tier M = 10M tokens
 ## Identity and authentication
 
 ### Unified GitHub identity
-One GitHub OAuth → one ToknX account → one API key + one node token → one credit balance. Same account consumes and contributes.
+One GitHub OAuth → one toknX account → one API key + one node token → one credit balance. Same account consumes and contributes.
 
 **Signup flow**:
 1. User visits `toknx.co` → GitHub OAuth → account created
@@ -194,7 +194,7 @@ One GitHub OAuth → one ToknX account → one API key + one node token → one 
 **Goal**: Contributor runs one command, mlx-lm starts, tunnel opens, node earns credits.
 
 - [ ] Scaffold Python CLI package
-- [ ] `toknx login`: authenticate against ToknX account (GitHub OAuth via browser redirect → local callback)
+- [ ] `toknx login`: authenticate against toknX account (GitHub OAuth via browser redirect → local callback)
 - [ ] `toknx start --model <hf_id>[,<hf_id>...]`:
   - Check mlx-lm installed (guide to install if not)
   - Validate all models are valid MLX format
@@ -221,7 +221,7 @@ One GitHub OAuth → one ToknX account → one API key + one node token → one 
 - [ ] GitHub signup CTA + "contribute a node" link to docs
 - [ ] Dockerize dashboard, add Traefik labels for `toknx.co` catch-all route
 - [ ] Run own nodes for 24h before sharing — verify dashboard looks alive with real traffic
-- [ ] Docs page: "How to connect Continue.dev / Aider / Cursor to ToknX" + "How to contribute a node"
+- [ ] Docs page: "How to connect Continue.dev / Aider / Cursor to toknX" + "How to contribute a node"
 - [ ] HN post: "I built a compute co-op for Apple Silicon — contribute idle Mac compute, earn LLM tokens"
 
 ---

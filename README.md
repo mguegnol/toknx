@@ -1,83 +1,52 @@
-# ToknX
+# TOKNX
 
-ToknX is a decentralized LLM inference network for Apple Silicon devices.
+toknX is a distributed inference network for Apple Silicon.
 
-In plain terms:
+- Run a Mac as a node
+- Serve `mlx-lm` models
+- Earn credits
+- Spend those credits through an OpenAI-compatible API
 
-1. People run Mac hardware as ToknX nodes.
-2. The network routes inference jobs to those nodes.
-3. Node operators earn credits and can spend those credits through an OpenAI-compatible API.
+Production URLs:
 
-This repository contains both sides of that system:
+- Dashboard: `https://toknx.co`
+- API: `https://api.toknx.co`
 
-- the coordinator that accepts API requests, tracks credits, and routes jobs
-- the node CLI that operators use to join the network
-- the dashboard and local infrastructure used to run the whole project in development
+## How It Works
 
-This README is split into two parts:
+1. Log in with GitHub.
+2. toknX gives you an API key and a node token.
+3. Start a node from your Mac with one or more models.
+4. toknX routes inference jobs to online nodes.
+5. Credits move from the consumer to the node operator.
 
-1. **Run a node and take part in the network**: for contributors and node operators
-2. **Run the whole project locally**: for maintainers working on ToknX itself
+## Requirements
 
-## Part 1: Run a Node and Take Part in the Network
+- Apple Silicon Mac
+- Xcode and the Apple Metal Toolchain
+- `uv`
 
-This section is for someone who wants to contribute a machine to ToknX.
-
-If you are brand new to the project, the important idea is simple: you install the `toknx` CLI, log in through the hosted ToknX coordinator, and start serving one or more models from your machine.
-
-The production CLI is intentionally strict:
-
-- it always talks to `https://coordinator.toknx.dev`
-- it is for real node operation only
-- it does not include local-development or mock-inference modes
-
-### What you need
-
-- an Apple Silicon Mac
-- `uv` installed and available on your `PATH`
-- a web browser for login
-- Xcode plus the Apple Metal Toolchain so ToknX can launch `mlx-lm` and run real local inference
-
-### 1. Install the node CLI
-
-Recommended install flow:
-
-```bash
-curl -fsSL https://toknx.dev/install-node.sh | bash
-```
-
-What the installer does:
-
-- installs Python `3.12` with `uv` for the ToknX CLI
-- installs the `toknx` CLI with `uv tool install`
-- installs `mlx-lm`
-
-If you are installing from this repository instead of a hosted script:
-
-```bash
-./install-node.sh
-```
-
-If you prefer a manual install:
-
-```bash
-uv python install 3.12
-uv tool install --python 3.12 ./apps/node-cli
-```
-
-If the installer tells you the Metal Toolchain is missing, install it with:
+Install the Metal Toolchain if needed:
 
 ```bash
 xcodebuild -downloadComponent MetalToolchain
 ```
 
-If `toknx` is not found after installation, add the `uv` tool bin directory to your `PATH`:
+## Install The CLI
+
+Recommended:
+
+```bash
+curl -fsSL https://toknx.co/install-node.sh | bash
+```
+
+If `toknx` is not on your `PATH` after install:
 
 ```bash
 export PATH="$(uv tool dir --bin):$PATH"
 ```
 
-### 2. Log in
+## Login
 
 Run:
 
@@ -85,308 +54,156 @@ Run:
 toknx login
 ```
 
-What happens:
+This opens your browser, completes GitHub OAuth, and prints your API key once.
 
-- your browser opens the ToknX login flow
-- the coordinator returns an API key and a node token
-- the CLI stores those credentials in your user config directory
+New accounts currently receive `1000` free credits.
 
-### 3. Start your node
+The CLI stores your credentials locally and uses them for:
 
-Start a real node:
+- API requests with your `api_key`
+- node registration with your `node_token`
 
-```bash
-toknx start \
-  --model mlx-community/Qwen2.5-Coder-7B-Instruct-4bit
-```
-
-You can advertise more than one model by passing a comma-separated list:
-
-```bash
-toknx start \
-  --model mlx-community/Qwen2.5-Coder-7B-Instruct-4bit,mlx-community/Qwen2.5-Coder-3B-Instruct-4bit
-```
-
-What ToknX does on startup:
-
-1. detects your hardware
-2. registers the node with the coordinator
-3. starts local `mlx-lm` model servers, which reuse the Hugging Face cache if the model is already present
-4. locks the node stake from your account balance
-5. opens a persistent WebSocket tunnel back to the coordinator
-6. serves inference requests until you stop the process
-
-`toknx start` detaches and keeps the node running in the background. The CLI prints the local log path when it launches the daemon.
-
-### 4. Check that the node is online
-
-From the CLI:
+Check your current account and node state with:
 
 ```bash
 toknx status
 ```
 
-You should see your account, credits, and local runtime state once the node is connected.
+## Start A Node
 
-### 5. Stop the node cleanly
-
-Use:
+Start a node with one model:
 
 ```bash
-toknx stop
+toknx start --model mlx-community/Llama-3.2-1B-Instruct-4bit
 ```
 
-Stopping cleanly terminates the background process, deregisters the node, and clears the local runtime state.
+Start a node with multiple models:
 
-### Useful commands
+```bash
+toknx start --model mlx-community/Llama-3.2-1B-Instruct-4bit,mlx-community/Qwen2.5-Coder-7B-Instruct-4bit
+```
+
+What `toknx start` does:
+
+1. Registers your node with toknX
+2. Locks the node stake from your account balance
+3. Starts local `mlx-lm` servers
+4. Reuses the Hugging Face model cache when available
+5. Connects your node to the coordinator
+6. Runs in the background
+
+Useful commands:
 
 ```bash
 toknx status
 toknx stop
 ```
 
-### Operator notes
+## Contributing Compute
 
-- Real inference nodes currently target Apple Silicon.
-- The production `toknx` CLI has no mock or local-development mode.
-- Node registration validates RAM against the models you declare.
-- Registering a node locks stake from the same account balance used for API consumption.
+Running a node is the main way to contribute to toknX.
 
-## Part 2: Run the Whole Project Locally
+Notes:
 
-If you want to deploy ToknX to a VPS, use the production Compose override and guide in [docs/vps-deployment.md](/Users/maxence/Documents/toknx/docs/vps-deployment.md).
+- only Apple Silicon nodes are supported
+- node registration checks whether declared models fit in available RAM
+- starting a node locks `500` credits as stake
+- the stake is refunded when you stop the node cleanly
 
-This section is for maintainers working on ToknX itself.
+## Pricing Model
 
-The recommended path is Docker Compose. It starts the coordinator, dashboard, database, observability tools, and the reverse proxy with the local URLs used throughout the maintainer workflow.
 
-Important boundary:
+For a job:
 
-- the production `toknx` CLI does not target `localhost`
-- local auth bypass and fake-node behavior are maintainer-only tools
-- local end-to-end verification lives in `tests/`, not in the shipped node CLI
-- `docker-compose.yml` is the realistic local stack, and `docker-compose.dev.yml` is the maintainer override for dev-bypass workflows
+```text
+cost = output_tokens * credits_per_1k_tokens / 1000
+```
 
-### What starts locally
+Coordinator fee:
 
-`docker compose up` brings up:
+- toknX keeps `10%`
+- the serving node earns `90%`
 
-- `traefik` on `http://localhost`
-- `coordinator` behind `http://localhost/api`
-- `dashboard` behind `http://localhost/`
-- `postgres`
-- `redis`
-- `prometheus`
-- `grafana`
 
-### Requirements
+## Credit Per Model Size
 
-- Docker with `docker compose`
-- `curl`
-- `uv` if you want to run backend tests or the coordinator directly from the checkout
-- `npm` if you want to run the dashboard outside Docker for faster frontend iteration
+toknX estimates model RAM from parameter count and quantization, then assigns a pricing tier.
 
-### 1. Start the stack
+| Estimated RAM | Tier | Credits / 1K output tokens |
+| --- | --- | --- |
+| `< 8 GB` | `S` | `1` |
+| `< 16 GB` | `M` | `2` |
+| `< 32 GB` | `L` | `4` |
+| `< 64 GB` | `XL` | `8` |
+| `>= 64 GB` | `XXL` | `16` |
 
-Before using Docker Compose locally, create your local env file:
+Examples:
+
+- `mlx-community/Llama-3.2-1B-Instruct-4bit` is in the `S` tier
+- larger 7B and 14B models usually land in higher tiers depending on quantization
+
+List currently available live models:
 
 ```bash
-cp .env.example .env
+curl https://api.toknx.co/v1/models
 ```
 
-For the realistic local stack, with real OAuth routed through Traefik:
+## Use The API Key
+
+After `toknx login`, use the printed API key with the OpenAI-compatible API.
+
+Example:
 
 ```bash
-docker compose up --build -d
+export TOKNX_API_KEY=toknx_api_...
 ```
 
-For maintainer-only shortcuts such as dev auth bypass and the smoke test:
+Check your balance:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build -d
-```
-
-Confirm the coordinator is healthy:
-
-```bash
-curl http://localhost/api/healthz
-```
-
-Expected response:
-
-```json
-{"status":"ok"}
-```
-
-Useful local URLs:
-
-- dashboard: `http://localhost`
-- API base: `http://localhost/api`
-- Traefik dashboard: `http://localhost:8080`
-- Grafana: `http://localhost:3001`
-- Prometheus: `http://localhost:9090`
-
-### 2. Authenticate locally
-
-If you started the base stack only, make sure `TOKNX_GITHUB_CLIENT_ID` and `TOKNX_GITHUB_CLIENT_SECRET` are available to Docker Compose, then test the real OAuth flow through Traefik:
-
-```bash
-open 'http://localhost/api/auth/github?redirect_uri=http://127.0.0.1:8787/callback&state=test-state'
-```
-
-If you started the dev override stack, local development bypasses real GitHub OAuth. Create an account with:
-
-```bash
-curl 'http://localhost/api/auth/github/callback?code=dev:alice'
-```
-
-Example response:
-
-```json
-{
-  "github_username": "alice",
-  "api_key": "toknx_api_...",
-  "node_token": "toknx_node_..."
-}
-
-If you want to exercise the real `toknx` CLI against the local maintainer stack, use the explicit base URL override:
-
-```bash
-TOKNX_API_BASE_URL=http://localhost/api toknx login
-TOKNX_API_BASE_URL=http://localhost/api toknx start --model mlx-community/Llama-3.2-1B-Instruct-4bit
-```
-```
-
-Keep the returned values:
-
-- `api_key` is for calling the inference API
-- `node_token` is used when registering a node
-
-### 3. Exercise the API
-
-List live models:
-
-```bash
-curl http://localhost/api/v1/models
-```
-
-Check the account balance:
-
-```bash
-curl http://localhost/api/account/balance \
-  -H 'Authorization: Bearer YOUR_API_KEY'
+curl https://api.toknx.co/account/balance \
+  -H "Authorization: Bearer $TOKNX_API_KEY"
 ```
 
 Send a completion request:
 
 ```bash
-curl http://localhost/api/v1/chat/completions \
-  -H 'Authorization: Bearer YOUR_API_KEY' \
-  -H 'Content-Type: application/json' \
+curl https://api.toknx.co/v1/chat/completions \
+  -H "Authorization: Bearer $TOKNX_API_KEY" \
+  -H "Content-Type: application/json" \
   --data '{
-    "model": "mlx-community/Qwen2.5-Coder-7B-Instruct-4bit",
+    "model": "mlx-community/Llama-3.2-1B-Instruct-4bit",
     "stream": false,
     "messages": [
-      { "role": "user", "content": "Write a haiku about distributed inference." }
+      { "role": "user", "content": "Reply with exactly: hello" }
     ]
   }'
 ```
 
-### 4. Run the smoke test
+## Local Override For Testing
 
-The smoke test covers:
+The production CLI uses `https://api.toknx.co` by default.
 
-- API health
-- dev signup
-- node registration
-- fake node tunnel wiring
-- completion request
-- stats update
-- balance and transaction checks
-- node deregistration
-
-Run it with:
+To point the CLI at a local or staging coordinator:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build -d
-tests/smoke_test.sh
+TOKNX_API_BASE_URL=http://localhost/api toknx login
+TOKNX_API_BASE_URL=http://localhost/api toknx start --model mlx-community/Llama-3.2-1B-Instruct-4bit
 ```
 
-Optional environment variables:
+## In Progress
 
-```bash
-TOKNX_BASE_URL=http://localhost/api
-TOKNX_MODEL_ID=mlx-community/Qwen2.5-Coder-7B-Instruct-4bit
-TOKNX_SMOKE_RUN_ID=custom-run-id
-tests/smoke_test.sh
-```
+Planned next features:
 
-The fake node used by the smoke test is maintainer-only test code. It is not part of the production `toknx` CLI.
+- WAN model sharding for models that do not fit on a single node
+- verification and stake slashing for untrusted or faulty nodes
+- dynamic model load and unload on nodes, without full restart
 
-### 5. Inner-loop development without rebuilding containers
 
-If you are actively editing code, you may want to run services directly from the repo.
+## For Maintainers
 
-If you want a starting point for local environment variables, copy:
+This repository also contains:
 
-```bash
-cp .env.example .env
-```
-
-Docker Compose also reads this file, so it is the local source of truth for the stack configuration. It is also useful when you want to run the coordinator directly from the checkout and tweak settings locally.
-
-Install backend dependencies:
-
-```bash
-uv sync --group dev
-```
-
-Install dashboard dependencies:
-
-```bash
-npm --prefix apps/dashboard install
-```
-
-Run the coordinator directly:
-
-```bash
-TOKNX_AUTH_DEV_BYPASS=true \
-TOKNX_JWT_SECRET=development-secret \
-uv run --package toknx-coordinator toknx-coordinator
-```
-
-Run the dashboard directly in another terminal:
-
-```bash
-TOKNX_PUBLIC_API_BASE=http://127.0.0.1:8000 \
-VITE_TOKNX_API_BASE=http://127.0.0.1:8000 \
-npm --prefix apps/dashboard run dev
-```
-
-Notes for this mode:
-
-- the coordinator defaults to SQLite when you run it directly
-- without Traefik, the API base is `http://127.0.0.1:8000`, not `http://localhost/api`
-- the production `toknx` CLI is not used against a natively started local coordinator
-
-### 6. Stop or reset the local stack
-
-Stop containers:
-
-```bash
-docker compose down
-```
-
-Stop and remove local volumes for a clean reset:
-
-```bash
-docker compose down -v
-```
-
-## Repository Layout
-
-- `apps/coordinator`: FastAPI coordinator for auth, credits, nodes, jobs, SSE, and WebSocket tunnels
-- `apps/node-cli`: Python CLI for login and node lifecycle
+- `apps/coordinator`: FastAPI coordinator
+- `apps/node-cli`: toknX CLI
 - `apps/dashboard`: SvelteKit dashboard
-- `infra`: Traefik, Prometheus, and Grafana config for local development
-- `tests/smoke_test.sh`: end-to-end smoke test against a running stack

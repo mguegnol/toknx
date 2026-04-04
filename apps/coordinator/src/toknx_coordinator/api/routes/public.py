@@ -17,8 +17,8 @@ from toknx_coordinator.services.model_registry import list_live_models
 
 router = APIRouter(tags=["public"])
 
-nodes_online_gauge = Gauge("toknx_nodes_online", "Count of online ToknX nodes")
-jobs_running_gauge = Gauge("toknx_jobs_running", "Count of running ToknX jobs")
+nodes_online_gauge = Gauge("toknx_nodes_online", "Count of online toknX nodes")
+jobs_running_gauge = Gauge("toknx_jobs_running", "Count of running toknX jobs")
 tokens_total_gauge = Gauge("toknx_tokens_generated_total", "Total generated output tokens")
 tokens_per_second_gauge = Gauge("toknx_tokens_per_second", "Observed network output throughput")
 STATS_CACHE_TTL_SECONDS = 5.0

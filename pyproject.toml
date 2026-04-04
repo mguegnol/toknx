@@ -1,7 +1,7 @@
 [project]
 name = "toknx-monorepo"
 version = "0.1.0"
-description = "ToknX v1 monorepo"
+description = "toknX v1 monorepo"
 requires-python = ">=3.12"
 
 [tool.pytest.ini_options]
@@ -35,4 +35,3 @@ dev = [
     "toknx-coordinator",
     "toknx-node",
 ]
-

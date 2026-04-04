@@ -24,16 +24,16 @@
 </script>
 
 <svelte:head>
-	<title>ToknX</title>
+	<title>toknX</title>
 	<meta
 		name="description"
-		content="Contribute idle Apple Silicon hardware. Earn LLM tokens. ToknX is a compute co-op for inference."
+		content="Contribute idle Apple Silicon hardware. Earn LLM tokens. toknX is a compute co-op for inference."
 	/>
 </svelte:head>
 
 <div class="shell">
 	<section class="hero">
-		<p class="eyebrow">ToknX</p>
+		<p class="eyebrow"><span class="dot"></span>toknX</p>
 		<h1>A compute co-op for Apple Silicon.</h1>
 		<p class="lede">
 			Contribute idle Mac hardware, earn credits, and spend them on code generation through an

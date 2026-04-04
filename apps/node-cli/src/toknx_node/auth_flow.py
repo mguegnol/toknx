@@ -16,7 +16,7 @@ class CallbackHandler(BaseHTTPRequestHandler):
             self.result_queue.put(params)
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"ToknX login complete. You can close this window.")
+        self.wfile.write(b"toknX login complete. You can close this window.")
 
 def log_message(self, format: str, *args) -> None:  # noqa: A003
     return

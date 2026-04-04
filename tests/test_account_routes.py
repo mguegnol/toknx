@@ -3,6 +3,7 @@ import pytest
 from toknx_coordinator.api.routes import account as account_routes
 from toknx_coordinator.services.credit_units import credits_to_subcredits
 from toknx_coordinator.services.credits import ensure_credit_balance
+from toknx_coordinator.core.config import get_settings
 
 
 @pytest.mark.anyio
@@ -19,12 +20,13 @@ async def test_account_balance_returns_formatted_credit_strings(
     )
     await ensure_credit_balance(db_session, account)
     payload = await account_routes.account_balance(account=account, session=db_session)
+    signup_bonus = get_settings().coordinator_signup_bonus
 
-    assert payload["balance"] == "20000"
-    assert payload["balance_subcredits"] == credits_to_subcredits(20_000)
-    assert payload["total_earned"] == "20000"
-    assert payload["total_earned_subcredits"] == credits_to_subcredits(20_000)
+    assert payload["balance"] == str(signup_bonus)
+    assert payload["balance_subcredits"] == credits_to_subcredits(signup_bonus)
+    assert payload["total_earned"] == str(signup_bonus)
+    assert payload["total_earned_subcredits"] == credits_to_subcredits(signup_bonus)
     assert payload["total_spent"] == "0"
     assert payload["total_spent_subcredits"] == 0
-    assert payload["transactions"][0]["amount"] == "20000"
-    assert payload["transactions"][0]["amount_subcredits"] == credits_to_subcredits(20_000)
+    assert payload["transactions"][0]["amount"] == str(signup_bonus)
+    assert payload["transactions"][0]["amount_subcredits"] == credits_to_subcredits(signup_bonus)

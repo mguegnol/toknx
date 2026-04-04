@@ -13,7 +13,7 @@ from typing import Awaitable, Callable, Protocol
 import httpx
 import websockets
 
-from toknx_node.client import ToknXClient
+from toknx_node.client import toknXClient
 from toknx_node.config import (
     RuntimeState,
     StoredConfig,
@@ -153,7 +153,7 @@ async def run_node(
     backend: InferenceBackend | None = None,
 ) -> None:
     api_base_url = get_api_base_url()
-    client = ToknXClient(
+    client = toknXClient(
         api_base_url=api_base_url,
         api_key=config.api_key,
         node_token=config.node_token,

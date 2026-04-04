@@ -4,7 +4,7 @@ import httpx
 
 
 @dataclass
-class ToknXClient:
+class toknXClient:
     api_base_url: str
     api_key: str
     node_token: str
@@ -38,4 +38,3 @@ class ToknXClient:
             response = client.post(f"/nodes/{node_id}/deregister", headers=self._headers(node=True))
             response.raise_for_status()
             return response.json()
-
