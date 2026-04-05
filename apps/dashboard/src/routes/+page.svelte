@@ -415,6 +415,7 @@
 		align-items: center;
 		gap: 14px;
 		margin-top: 36px;
+		width: 100%;
 	}
 
 	.join-label {
@@ -470,7 +471,7 @@
 	}
 
 	.copy-icon {
-		font-size: 1rem;
+		font-size: 1.5rem;
 		line-height: 1;
 	}
 
@@ -478,6 +479,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 8px;
+		margin-top: 10px;
 		padding: 0 20px;
 		min-height: 42px;
 		border-radius: 10px;
@@ -870,6 +872,10 @@
 
 		.content-grid {
 			grid-template-columns: 1fr;
+		}
+
+		.live-badge {
+			margin-top: 0;
 		}
 
 		.row {
