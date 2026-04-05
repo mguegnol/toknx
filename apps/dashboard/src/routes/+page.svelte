@@ -761,7 +761,6 @@
 	.event-row {
 		align-items: flex-start;
 		justify-content: flex-start;
-		gap: 0;
 	}
 
 	time {
@@ -882,8 +881,5 @@
 			justify-content: flex-start;
 		}
 
-		time {
-			min-width: 0;
-		}
 	}
 </style>
