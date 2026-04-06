@@ -21,6 +21,7 @@ x-coordinator-env: &coordinator-env
 x-dashboard-env: &dashboard-env
   TOKNX_PUBLIC_API_BASE: ${TOKNX_PUBLIC_API_BASE}
   VITE_TOKNX_API_BASE: ${VITE_TOKNX_API_BASE}
+  TOKNX_DASHBOARD_MOCK_MODE: ${TOKNX_DASHBOARD_MOCK_MODE:-false}
 
 services:
   coordinator:

@@ -1,12 +1,20 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import {
+		nextMockEvent,
+		tickMockLeaders,
+		tickMockModels,
+		tickMockStats
+	} from '$lib/mock-dashboard';
 	import type { EventRow, Leader, ModelRow, Stats } from '$lib/types';
 
 	export let data: {
 		publicApiBase: string;
+		mockMode: boolean;
 		stats: Stats;
 		models: ModelRow[];
 		leaders: Leader[];
+		initialEvents: EventRow[];
 	};
 
 	const API_BASE = data.publicApiBase.replace(/\/$/, '');
@@ -22,11 +30,12 @@
 	let stats = data.stats;
 	let models = data.models;
 	let leaders = data.leaders;
-	let events: EventRow[] = [];
+	let events: EventRow[] = data.initialEvents;
 	let copied = false;
 	let refreshTimer: ReturnType<typeof setInterval> | undefined;
 	let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
 	let source: EventSource | undefined;
+	let mockStep = 0;
 
 	const INSTALL_CMD = 'curl -fsSL https://toknx.co/install-node.sh | bash';
 
@@ -96,6 +105,16 @@
 
 	function startPolling() {
 		stopPolling();
+		if (data.mockMode) {
+			refreshTimer = setInterval(() => {
+				mockStep += 1;
+				stats = tickMockStats(stats, mockStep);
+				models = tickMockModels(models, mockStep);
+				leaders = tickMockLeaders(leaders, mockStep);
+				events = [nextMockEvent(mockStep), ...events].slice(0, 24);
+			}, 2500);
+			return;
+		}
 		void refreshDashboardData();
 		refreshTimer = setInterval(() => {
 			if (document.visibilityState === 'visible') {
@@ -119,13 +138,20 @@
 		const handleVisibilityChange = () => {
 			if (document.visibilityState === 'hidden') {
 				stopPolling();
+				if (!data.mockMode) {
+					closeEventSource();
+				}
 				return;
 			}
-			connectEventStream();
+			if (!data.mockMode) {
+				connectEventStream();
+			}
 			startPolling();
 		};
 
-		connectEventStream();
+		if (!data.mockMode) {
+			connectEventStream();
+		}
 		startPolling();
 		document.addEventListener('visibilitychange', handleVisibilityChange);
 
